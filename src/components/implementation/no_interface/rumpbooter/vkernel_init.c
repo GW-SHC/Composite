@@ -577,6 +577,7 @@ sched_fn(void *x)
 			while (cos_sched_rcv(sched_rcv, &tid, &blocked, &cycles)) ;
 
 			if (fail_count_cycs >= fail_at_cycles) {
+				printc("count:%llu at:%llu\n", fail_count_cycs, fail_at_cycles);
 				printc("VKERNEL is DEAD!!...\n");
 				while (1) ;
 			}

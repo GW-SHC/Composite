@@ -19,8 +19,8 @@
 #define BOOTUP_ITERS 100 
 #define VK_FAILURE_TIME 20 //seconds
 
-#undef __SIMPLE_XEN_LIKE_TCAPS__
-#define __SIMPLE_DISTRIBUTED_TCAPS__
+#define __SIMPLE_XEN_LIKE_TCAPS__
+#undef __SIMPLE_DISTRIBUTED_TCAPS__
 #undef __INTELLIGENT_TCAPS__
 
 #define HW_ISR_LINES 32
