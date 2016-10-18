@@ -81,6 +81,7 @@ thdcap_t dom0_sla_thd;
 tcap_t dom0_sla_tcap;
 arcvcap_t dom0_sla_rcv;
 asndcap_t dom0_sla_snd, vktoslasnd;
+tcap_prio_t dom0_sla_prio = PRIO_HIGH;
 #endif
 
 void
@@ -166,7 +167,8 @@ setup_credits(void)
 					vmcredits[i] = (DOM0_CREDITS * VM_TIMESLICE * cycs_per_usec);
 					total_credits += vmcredits[i];
 #elif defined(__SIMPLE_XEN_LIKE_TCAPS__)
-					vmcredits[i] = TCAP_RES_INF;
+					vmcredits[i] = (DOM0_CREDITS * VM_TIMESLICE * cycs_per_usec);
+					//vmcredits[i] = TCAP_RES_INF;
 					total_credits += (DOM0_CREDITS * VM_TIMESLICE * cycs_per_usec);
 #endif
 					break;
@@ -249,13 +251,13 @@ fillup_budgets(void)
  * Credits at bootup shouldn't matter..!!
  */
 int
-bootup_sched_fn(int index, tcap_res_t budget)
+bootup_sched_fn(int index, tcap_res_t budget, tcap_res_t sched_budget)
 {
 	if (vm_bootup[index] < BOOTUP_ITERS) {
 		tcap_res_t timeslice = VM_TIMESLICE * cycs_per_usec;
 
 		vm_bootup[index] ++;
-		if (budget >= timeslice) {
+		if (budget >= timeslice || cycles_same(sched_budget, 0)) {
 			if (cos_asnd(vksndvm[index], 1)) assert(0);
 		} else {
 			if (TCAP_RES_IS_INF(vmcredits[index])) {
@@ -294,6 +296,8 @@ sched_fn(void *x)
 	unsigned int usage[COS_VIRT_MACH_COUNT];
 	unsigned int count[COS_VIRT_MACH_COUNT];
 	cycles_t cycs_per_sec                   = cycs_per_usec * 1000 * 1000;
+	cycles_t fail_at_cycles                 = ((cycles_t) (cycs_per_sec)) * VK_FAILURE_TIME;
+	cycles_t fail_count_cycs                = 0;
 	cycles_t total_cycs                     = 0;
 	unsigned int counter                    = 0;
 	cycles_t start                          = 0;
@@ -327,7 +331,7 @@ sched_fn(void *x)
 			budget = (tcap_res_t)cos_introspect(&vkern_info, vminittcap[index], TCAP_GET_BUDGET);
 			sched_budget = (tcap_res_t)cos_introspect(&vkern_info, sched_tcap, TCAP_GET_BUDGET);
 			
-			if (!bootup_sched_fn(index, budget)) continue;
+//			if (!bootup_sched_fn(index, budget, sched_budget)) continue;
 
 			if (cycles_same(budget, 0) && !vm_cr_reset[index]) {
 				vm_deletenode(&vms_runqueue, &vmnode[index]);
@@ -375,6 +379,8 @@ sched_fn(void *x)
 				if (cos_tcap_delegate(vksndvm[index], sched_tcap, transfer_budget, vmprio[index], TCAP_DELEG_YIELD)) assert(0);
 			}
 			rdtscll(end);
+
+			fail_count_cycs += (end - start);
 
 #if defined(PRINT_CPU_USAGE)
 			tcap_res_t cpu_bound_usage = 0;
@@ -444,6 +450,12 @@ sched_fn(void *x)
 				} 
 			}
 
+			if (fail_count_cycs >= fail_at_cycles) {
+				printc("count:%llu at:%llu\n", fail_count_cycs, fail_at_cycles);
+				printc("VKERNEL is DEAD!!...\n");
+				while (1) ;
+			}
+
 		}
 	}
 #elif defined(__SIMPLE_XEN_LIKE_TCAPS__)
@@ -481,7 +493,7 @@ sched_fn(void *x)
 
 			budget = (tcap_res_t)cos_introspect(&vkern_info, vminittcap[index], TCAP_GET_BUDGET);
 
-			if (!bootup_sched_fn(index, budget)) continue;
+//			if (!bootup_sched_fn(index, budget, TCAP_RES_INF)) continue;
 
 			if (index && cycles_same(budget, 0) && !vm_cr_reset[index]) {
 				vm_deletenode(&vms_under, &vmnode[index]);
@@ -514,6 +526,7 @@ sched_fn(void *x)
 			}
 			rdtscll(end);
 
+			fail_count_cycs += (end - start);
 			if (no_vms == COS_VIRT_MACH_COUNT - 1) total_cycles += (end - start);
 			if (total_cycles >= total_credits) {
 				reset_credits();
@@ -562,6 +575,11 @@ sched_fn(void *x)
 #endif
 
 			while (cos_sched_rcv(sched_rcv, &tid, &blocked, &cycles)) ;
+
+			if (fail_count_cycs >= fail_at_cycles) {
+				printc("VKERNEL is DEAD!!...\n");
+				while (1) ;
+			}
 		}
 	}
 #endif
@@ -617,7 +635,7 @@ chronos_fn(void *x)
 	//static cycles_t prev = 0;
 
 	while (1) {
-		tcap_res_t total_budget = TCAP_RES_INF;
+		tcap_res_t total_budget = total_credits * cycs_per_usec;
 		tcap_res_t sla_slice = VM_TIMESLICE * cycs_per_usec;
 		thdid_t tid;
 		int blocked;
@@ -648,7 +666,7 @@ chronos_fn(void *x)
 		//printc("Chronos activated :%llu: %lu:%lu-%lu:%lu-%d\n", act, sched_budget, total_budget, sla_budget, sla_slice, SCHED_QUANTUM);
 
 		//if (cos_tcap_delegate(vktoslasnd, BOOT_CAPTBL_SELF_INITTCAP_BASE, sla_slice, PRIO_LOW, TCAP_DELEG_YIELD)) assert(0);
-		if (cos_tcap_transfer(dom0_sla_rcv, BOOT_CAPTBL_SELF_INITTCAP_BASE, sla_slice, PRIO_LOW)) assert(0);
+		if (cos_tcap_transfer(dom0_sla_rcv, BOOT_CAPTBL_SELF_INITTCAP_BASE, sla_slice, PRIO_HIGH)) assert(0);
 		//printc("%s:%d\n", __func__, __LINE__);
 		/* additional cycles so vk doesn't allocate less budget to one of the vms.. */
 		if (cos_tcap_delegate(chtoshsnd, BOOT_CAPTBL_SELF_INITTCAP_BASE, total_budget, PRIO_LOW, TCAP_DELEG_YIELD)) assert(0);
@@ -814,7 +832,7 @@ cos_init(void)
 #if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
 		if (id == 0) {
 			printc("\tCreating Time Management System Capabilities in DOM0\n");
-			dom0_sla_tcap = cos_tcap_alloc(&vkern_info, PRIO_LOW);
+			dom0_sla_tcap = cos_tcap_alloc(&vkern_info, dom0_sla_prio);
 			assert(dom0_sla_tcap);
 			dom0_sla_thd = cos_thd_alloc(&vkern_info, vmbooter_info[id].comp_cap, dom0_sla_fn, (void *)id);
 			assert(dom0_sla_thd);

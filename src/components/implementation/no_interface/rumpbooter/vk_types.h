@@ -17,6 +17,7 @@
 #define MIN_CYCS (1<<12)
 
 #define BOOTUP_ITERS 100 
+#define VK_FAILURE_TIME 20 //seconds
 
 #undef __SIMPLE_XEN_LIKE_TCAPS__
 #define __SIMPLE_DISTRIBUTED_TCAPS__
