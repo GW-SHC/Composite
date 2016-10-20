@@ -13,8 +13,7 @@
 #define SCHED_MIN_TIMESLICE (10)
 #define SCHED_QUANTUM (VM_TIMESLICE * 100)
 
-#undef PRINT_CPU_USAGE 
-#define MIN_CYCS (1<<12)
+#define PRINT_CPU_USAGE 
 
 #define BOOTUP_ITERS 100 
 #define VK_FAILURE_TIME 20 //seconds
@@ -44,14 +43,13 @@ enum vm_prio {
 #endif
 };
 
+#define IO_BOUND_VM  1  /* VM that is I/O Bound */
+#define CPU_BOUND_VM 2 /* VM that is CPU Bound: Set to a val beyond number of VMs, so no CPU BOUND VM */ 
 
 #if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
 #define RIO_PRIO    PRIO_HIGH /* REAL I/O Priority */
 #define VIO_PRIO    PRIO_MID /* Virtual I/O Priority */
 #define RK_THD_PRIO PRIO_LOW /* Rumpkernel thread priority */
-
-#define IO_BOUND_VM  1  /* VM that is I/O Bound */
-#define CPU_BOUND_VM 2 /* VM that is CPU Bound: Set to a val beyond number of VMs, so no CPU BOUND VM */ 
 
 #define VIO_BUDGET_MAX (VM_TIMESLICE) /* Maximum a I/O Tcap in DOM0 should have */
 #define VIO_BUDGET_THR (VM_MIN_TIMESLICE) /* minimum excess budget with I/O tcap to transfer/delegate back to VM */
@@ -84,12 +82,14 @@ enum vm_status {
 enum vm_credits {
 #if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
 	DOM0_CREDITS = 1,
+	DOM0_SLA_CREDITS = 1,
 	VM1_CREDITS  = 4,
-	VM2_CREDITS  = 8,
+	VM2_CREDITS  = 5,
 #elif defined(__SIMPLE_XEN_LIKE_TCAPS__)
-	DOM0_CREDITS = 5, // not used, DOM0 gets INF budget.. But this is required for cpu usage calc. (assuming dom0 is 50% & vm1 + vm2 = 50%) 
+	DOM0_CREDITS = 2, // not used, DOM0 gets INF budget.. But this is required for cpu usage calc. (assuming dom0 is 50% & vm1 + vm2 = 50%) 
 	VM1_CREDITS  = 4,
-	VM2_CREDITS  = 1,
+	IO_BOOST_CREDITS = 1,
+	VM2_CREDITS  = 4,
 #endif
 };
 

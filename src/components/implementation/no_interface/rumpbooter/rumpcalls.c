@@ -106,8 +106,7 @@ cos_shmem_send(void * buff, unsigned int size, unsigned int srcvm, unsigned int 
 		tcap_res_t budget = (tcap_res_t)cos_introspect(&booter_info, BOOT_CAPTBL_SELF_INITTCAP_BASE, TCAP_GET_BUDGET);
 		tcap_res_t res;
 
-		if (budget >= min) res = budget / 2; /* x cycles */ 
-		else res = 0; /* 0 = 100% budget */
+		res = budget / 2; /* x cycles */ 
 
 		if(cos_tcap_delegate(sndcap, BOOT_CAPTBL_SELF_INITTCAP_BASE, res, VIO_PRIO, 0)) assert(0);
 	}
@@ -270,7 +269,7 @@ check_vio_budgets(void)
 		 * 	Only deficit checks between vms.. 
 		 * 	DOM0 deficit accounting - TODO
 		 */
-		for (j = i + 1 ; j < COS_VIRT_MACH_COUNT ; j ++) {
+/*		for (j = i + 1 ; j < COS_VIRT_MACH_COUNT ; j ++) {
 			unsigned int num = 0;
 			int from, to;
 			unsigned int fval, tval;
@@ -291,7 +290,7 @@ check_vio_budgets(void)
 				__sync_fetch_and_add(&(vio_deficit[to][from]), num);
 			}
 		}
-
+*/
 		/*
 		 * I've more than required budget and I've enough to transfer,
 		 * If I don't have this check, I might be trasferring in very small chunks.. 
@@ -323,7 +322,6 @@ cpu_bound_thd_fn(void *d)
 static void
 cpu_bound_test(void)
 {
-#if defined (__SIMPLE_DISTRIBUTED_TCAPS__)
 #define BOUND_TEST_ITERS (1<<30)
 	thdcap_t ts;
 	int i = BOUND_TEST_ITERS;
@@ -337,44 +335,7 @@ cpu_bound_test(void)
 		printc(".");
 	}
 	assert(0);
-#endif
 	return;
-}
-
-static void
-print_cycles(void)
-{
-	static cycles_t total_cycles = 0;
-	static cycles_t prev = 0, curr = 0;
-	cycles_t cycs_per_sec = cycs_per_usec * 1000 * 1000 * 5;
-	tcap_res_t isrbud, viobud, mainbud;
-
-	rdtscll(curr);
-	if (prev) total_cycles += (curr - prev);
-	prev = curr;
-
-	if (total_cycles >= cycs_per_sec) {
-#if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
-		if (vmid == IO_BOUND_VM) {
-			mainbud = (tcap_res_t)cos_introspect(&booter_info, BOOT_CAPTBL_SELF_INITTCAP_BASE, TCAP_GET_BUDGET);
-			
-			printc("vm%d: %lu\n", vmid, mainbud);
-		} else if (vmid == 0) {
-			mainbud = (tcap_res_t)cos_introspect(&booter_info, BOOT_CAPTBL_SELF_INITTCAP_BASE, TCAP_GET_BUDGET);
-			isrbud  = (tcap_res_t)cos_introspect(&booter_info, irq_tcap[HW_ISR_FIRST], TCAP_GET_BUDGET);
-			viobud  = (tcap_res_t)cos_introspect(&booter_info, vio_tcap[IO_BOUND_VM - 1], TCAP_GET_BUDGET);
-			printc("dom0: %lu\n", mainbud + isrbud + viobud);
-			printc("dom0: %lu\n", mainbud);
-		} else {
-			assert(0);
-		}
-#elif defined(__SIMPLE_XEN_LIKE_TCAPS__)
-		mainbud = (tcap_res_t)cos_introspect(&booter_info, BOOT_CAPTBL_SELF_INITTCAP_BASE, TCAP_GET_BUDGET);
-		printc("vm%d: %lu\n", vmid, mainbud);
-#endif
-
-		total_cycles = 0;
-	}
 }
 
 /* Called once from RK init thread. The one in while(1) */
@@ -534,10 +495,12 @@ cos_sched_yield(void)
 
 void
 cos_vm_yield(void)
-#if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
-{ if(cos_tcap_delegate(VM_CAPTBL_SELF_VKASND_BASE, BOOT_CAPTBL_SELF_INITTCAP_BASE, 0, PRIO_LOW, TCAP_DELEG_YIELD)) assert(0); }
-#elif defined(__SIMPLE_XEN_LIKE_TCAPS__)
-{ cos_asnd(VM_CAPTBL_SELF_VKASND_BASE, 1); }
+#if defined(__SIMPLE_DISTRIBUTED_TCAPS__)
+{
+	cos_asnd(VM_CAPTBL_SELF_VKASND_BASE, 1);
+}
+#else
+{ cos_thd_switch(BOOT_CAPTBL_SELF_INITTHD_BASE); }
 #endif
 
 void
