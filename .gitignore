@@ -17,7 +17,7 @@ composite_new
 tags
 src/kernel/include/shared/cpu_ghz.h
 src/Makefile.cosconfig
-src/PLATFORM
+src/PLATFORM_ID
 modules.order
 .depend
 *.img
@@ -27,3 +27,4 @@ GPATH
 GRTAGS
 GSYMS
 GTAGS
+tools/.vagrant
