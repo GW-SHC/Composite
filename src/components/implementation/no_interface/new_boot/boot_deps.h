@@ -9,67 +9,63 @@
 #include <cobj_format.h>
 #include <cos_types.h>
 
-/* 
- * Abstraction layer around 1) synchronization, 2) scheduling and
- * thread creation, and 3) memory operations.  
- */
+static vaddr_t kmem_heap = BOOT_MEM_KM_BASE;
+static unsigned long n_kern_memsets = 0;
 
-/* synchronization... */
-//#define LOCK()   if (sched_component_take(cos_spd_id())) BUG();
-//#define UNLOCK() if (sched_component_release(cos_spd_id())) BUG();
+//the booter uses this to keep track of each comp mapped in
+struct comp_cap_info {
+	struct cos_compinfo cos_compinfo;
+	vaddr_t addr_start;
+	vaddr_t vaddr_mapped_in_booter;
+	vaddr_t upcall_entry;
+};
+struct comp_cap_info comp_cap_info[MAX_NUM_SPDS+1];
 
-///* scheduling/thread operations... */
-//#define __sched_create_thread_default sched_create_thread_default
-//
-///* memory operations */
-//#define __local_mman_get_page   mman_get_page
-//#define __local_mman_alias_page mman_alias_page
-//
-//
-//#include <cinfo.h>
-//#include <cos_vect.h>
-//
-//COS_VECT_CREATE_STATIC(spd_info_addresses);
-//
-//int
-//cinfo_map(spdid_t spdid, vaddr_t map_addr, spdid_t target)
-//{
-//	vaddr_t cinfo_addr;
-//
-//	cinfo_addr = (vaddr_t)cos_vect_lookup(&spd_info_addresses, target);
-//	if (0 == cinfo_addr) return -1;
-//	if (map_addr != 
-//	    (__local_mman_alias_page(cos_spd_id(), cinfo_addr, spdid, map_addr, MAPPING_RW))) {
-//		return -1;
-//	}
-//
-//	return 0;
-//}
-//
-//spdid_t
-//cinfo_get_spdid(int iter)
-//{
-//	if (iter > MAX_NUM_SPDS) return 0;
-//	if (hs[iter] == NULL) return 0;
-//
-//	return hs[iter]->id;
-//}
-//
-//static int boot_spd_set_symbs(struct cobj_header *h, spdid_t spdid, struct cos_component_information *ci);
-//static void
-//comp_info_record(struct cobj_header *h, spdid_t spdid, struct cos_component_information *ci)
-//{
-//	if (!cos_vect_lookup(&spd_info_addresses, spdid)) {
-//		boot_spd_set_symbs(h, spdid, ci);
-//		cos_vect_add_id(&spd_info_addresses, (void*)round_to_page(ci), spdid);
-//	}
-//}
-//
-//static void
-//boot_deps_init(void)
-//{
-//	cos_vect_init_static(&spd_info_addresses);
-//}
-//
-//static void
-//boot_deps_run(void) { return; }
+void
+cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
+{
+	static int first = 1;
+
+	if (first) {
+		first = 0;
+		__alloc_libc_initilize();
+		constructors_execute();
+	}
+
+	switch (t) {
+	case COS_UPCALL_THD_CREATE:
+	/* New thread creation method passes in this type. */
+	{
+		/* A new thread is created in this comp. */
+
+		/* arg1 is the thread init data. 0 means
+		 * bootstrap. */
+		if (arg1 == 0) {
+			cos_init(NULL);
+		} 
+		return;
+	}
+	default:
+		/* fault! */
+		printc("fault?\n");
+		*(int*)NULL = 0;
+		return;
+	}
+	printc("fault?\n");
+	return;
+}
+
+/* We have 5 pages for the captbl of llboot: 1/2 page for the top
+ * level, 4+1/2 pages for the second level. */
+#define CAP_ID_32B_FREE BOOT_CAPTBL_FREE;            // goes up
+#define CAP_ID_64B_FREE ((PAGE_SIZE*BOOT_CAPTBL_NPAGES - PAGE_SIZE/2)/16 - CAP64B_IDSZ) // goes down
+
+//capid_t capid_16b_free = CAP_ID_32B_FREE;
+capid_t capid_32b_free = CAP_ID_32B_FREE;
+capid_t capid_64b_free = CAP_ID_64B_FREE;
+
+static void
+llboot_thd_done(void)
+{
+	printc("llboot_thd_done\n");
+}

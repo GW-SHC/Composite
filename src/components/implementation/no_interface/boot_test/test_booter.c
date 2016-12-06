@@ -4,7 +4,7 @@
 #include <cos_component.h>
 #include <cobj_format.h>
 #include <cos_kernel_api.h>
-
+#include "boot_deps.h"
 
 static void
 cos_llprint(char *s, int len)
@@ -37,7 +37,7 @@ printc(char *fmt, ...)
 }
 
 void 
-cos_init(void)
+test_init(void)
 {
 
 	prints("Test comp for new booter\n");
