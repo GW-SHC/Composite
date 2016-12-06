@@ -344,13 +344,6 @@ boot_create_cap_system(void)
 		
 		printc("Comp %d (%s) activated @ %x, size %ld!\n", h->id, h->name, sect->vaddr, tot);
 		
-		thdcap_t main_thd = cos_thd_alloc(&boot_info, cc, comp_cap_info[spdid].upcall_entry, 0);
-        	assert(main_thd);
-		int thdid = cos_introspect(&boot_info, main_thd, THD_GET_TID);
-		cos_cap_cpy_at(&comp_cap_info[spdid].cos_compinfo, BOOT_CAPTBL_SELF_INITTHD_BASE, &boot_info, main_thd);	
-		printc("Main thd= cap:%x tid:%x\n", (unsigned int)main_thd, thdid);
-		
-		cos_thd_switch(main_thd);	
 	}
 
 	return;
