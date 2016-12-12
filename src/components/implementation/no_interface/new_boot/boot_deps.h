@@ -21,15 +21,21 @@ struct comp_cap_info {
 };
 struct comp_cap_info comp_cap_info[MAX_NUM_SPDS+1];
 
+thdcap_t schedule[MAX_NUM_SPDS+1];
+
 void
 cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
 	static int first = 1;
+	int i = 0;
 	printc("core %ld: <<cos_upcall_fn thd %d (type %d, CREATE=%d, DESTROY=%d, FAULT=%d)>>\n",
 	       cos_cpuid(), cos_get_thd_id(), t, COS_UPCALL_THD_CREATE, COS_UPCALL_DESTROY, COS_UPCALL_UNHANDLED_FAULT);
 
 	if (first) {
 		first = 0;
+		for(i = 0; i < MAX_NUM_SPDS; i++){
+			schedule[i] = NULL;
+		}
 		__alloc_libc_initilize();
 		constructors_execute();
 	}
@@ -39,12 +45,16 @@ cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 	/* New thread creation method passes in this type. */
 	{
 		/* A new thread is created in this comp. */
-
+		i = 0;
 		/* arg1 is the thread init data. 0 means
 		 * bootstrap. */
 		if (arg1 == 0) {
 			cos_init(NULL);
-		} 
+		}
+	        while(schedule[i] != NULL){
+			cos_thd_switch(schedule[i]);
+			i++;
+		}	
 		return;
 	}
 	default:

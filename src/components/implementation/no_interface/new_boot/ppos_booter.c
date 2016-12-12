@@ -1,7 +1,5 @@
 /*
  *TODO:
- *  1. Fix code structure: put pte allocations in comp_map()
- *  2. Find page fault in cos_thd_switch
  *  3. Initialize some schedule[] array for components initialization, based on dependcies
  *  4. Port Robbie's code
  *  5. Write Assembly 'bouncer' function to a "boot_init_done()" fn in booter
@@ -343,8 +341,12 @@ boot_create_cap_system(void)
 		
 		thdcap_t main_thd = cos_initthd_alloc(&boot_info, cc);
 		assert(main_thd);
-		
-		cos_thd_switch(main_thd);
+		i = 0;
+		while(schedule[i] != NULL){
+			i++;
+		}
+		schedule[i] = main_thd;
+		//cos_thd_switch(main_thd);
 	}
 
 	return;
