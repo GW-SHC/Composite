@@ -67,6 +67,7 @@ asndcap_t cos_asnd_alloc(struct cos_compinfo *ci, arcvcap_t arcvcap, captblcap_t
 void *cos_page_bump_alloc(struct cos_compinfo *ci);
 void cos_shmem_alloc(struct cos_compinfo *ci, unsigned long sz);
 void cos_shmem_map(struct cos_compinfo *ci, unsigned long sz);
+vaddr_t __bump_mem_expand_range(struct cos_compinfo *ci, pgtblcap_t cipgtbl, vaddr_t mem_ptr, unsigned long mem_sz);
 
 capid_t cos_cap_cpy(struct cos_compinfo *dstci, struct cos_compinfo *srcci, cap_t srcctype, capid_t srccap);
 int cos_cap_cpy_at(struct cos_compinfo *dstci, capid_t dstcap, struct cos_compinfo *srcci, capid_t srccap);

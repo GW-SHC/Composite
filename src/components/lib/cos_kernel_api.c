@@ -292,7 +292,7 @@ __capid_bump_alloc(struct cos_compinfo *ci, cap_t cap)
 /* 
  * need to make this a generic function to be called even from __page_bump_valloc()
  */
-static vaddr_t
+vaddr_t
 __bump_mem_expand_range(struct cos_compinfo *ci, pgtblcap_t cipgtbl, vaddr_t mem_ptr, unsigned long mem_sz)
 {
 	vaddr_t addr;
@@ -304,6 +304,7 @@ __bump_mem_expand_range(struct cos_compinfo *ci, pgtblcap_t cipgtbl, vaddr_t mem
 		capid_t pte_cap;
 		vaddr_t ptemem_cap;
 
+		printd("__BUMP_MEM_EXPAND_RANGE: %p\n", mem_ptr);
 		pte_cap    = __capid_bump_alloc(meta, CAP_PGTBL);
 		ptemem_cap = __kmem_bump_alloc(meta);
 		/* TODO: handle the case of running out of memory */

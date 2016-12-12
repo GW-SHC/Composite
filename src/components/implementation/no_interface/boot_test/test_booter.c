@@ -16,9 +16,9 @@ prints(char *s)
 {
 		int len = strlen(s);
 
-			cos_llprint(s, len);
+		cos_llprint(s, len);
 
-				return len;
+		return len;
 }
 
 int __attribute__((format(printf,1,2)))
@@ -37,10 +37,10 @@ printc(char *fmt, ...)
 }
 
 void 
-test_init(void)
+cos_init(void)
 {
 
-	prints("Test comp for new booter\n");
+	prints("\nTest comp for new booter\n");
 
 }
 

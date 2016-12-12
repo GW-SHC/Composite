@@ -25,6 +25,8 @@ void
 cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
 	static int first = 1;
+	printc("core %ld: <<cos_upcall_fn thd %d (type %d, CREATE=%d, DESTROY=%d, FAULT=%d)>>\n",
+	       cos_cpuid(), cos_get_thd_id(), t, COS_UPCALL_THD_CREATE, COS_UPCALL_DESTROY, COS_UPCALL_UNHANDLED_FAULT);
 
 	if (first) {
 		first = 0;
@@ -47,7 +49,7 @@ cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 	}
 	default:
 		/* fault! */
-		printc("fault?\n");
+		printc("default?\n");
 		*(int*)NULL = 0;
 		return;
 	}

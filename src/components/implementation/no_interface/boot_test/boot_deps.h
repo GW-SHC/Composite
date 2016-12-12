@@ -24,7 +24,7 @@ struct comp_cap_info comp_cap_info[MAX_NUM_SPDS+1];
 void
 cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
-	printc("cos_upcall_fn\n");
+	cos_init();	
 	return;
 }
 
