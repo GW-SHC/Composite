@@ -28,3 +28,9 @@ cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 	return;
 }
 
+#define CAP_ID_32B_FREE BOOT_CAPTBL_FREE            // goes up
+#define CAP_ID_64B_FREE ((PAGE_SIZE*BOOT_CAPTBL_NPAGES - PAGE_SIZE/2)/16 - CAP64B_IDSZ) // goes down
+
+enum{
+       	VM0_CAPTBL_SELF_IOSINV_BASE = round_up_to_pow2(CAP_ID_32B_FREE + CAP32B_IDSZ, CAPMAX_ENTRY_SZ)
+};

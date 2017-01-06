@@ -39,8 +39,14 @@ printc(char *fmt, ...)
 void 
 cos_init(void)
 {
-
-	prints("\nTest comp for new booter\n");
+	
+	prints("\n|*****************************|\n");
+	prints(" Wecome to test_boot component!\n");
+	prints("|*****************************|\n");
+	sinvcap_t sinv = 0;
+	compcap_t cc;
+	int sinv_ret = 0;
+	sinv_ret = cos_sinv(VM0_CAPTBL_SELF_IOSINV_BASE);
 
 }
 

@@ -1,9 +1,6 @@
 /*
  *TODO:
- *  3. Initialize some schedule[] array for components initialization, based on dependcies
- *  4. Port Robbie's code
- *  5. Write Assembly 'bouncer' function to a "boot_init_done()" fn in booter
- *  6. make SINV() from child comp to booter comp before child's cos_init return
+ *	Test Scheduling Array for dependencies 
  */
 
 #include <stdio.h>
@@ -14,25 +11,27 @@
 #include <cos_kernel_api.h>
 #include <boot_deps.h>
 
+/*Assembly function for sinv from new component*/
+extern void *__inv_test_entry(int a, int b, int c);
 struct cos_compinfo boot_info;	
-//struct cos_compinfo comp_info[MAX_NUM_SPDS+1];	
 
 struct cobj_header *hs[MAX_NUM_SPDS+1];
 
-extern vaddr_t cos_upcall_entry;
+struct deps {
+	short int client, server;
+};
+struct deps *deps;
+int ndeps;
 
 static void
 cos_llprint(char *s, int len)
 { call_cap(PRINT_CAP_TEMP, (int)s, len, 0, 0); }
 
-
 int
 prints(char *s)
 {
 		int len = strlen(s);
-
 		cos_llprint(s, len);
-
 		return len;
 }
 
@@ -51,17 +50,8 @@ printc(char *fmt, ...)
 	  return ret;
 }
 
-
-struct deps {
-	short int client, server;
-};
-struct deps *deps;
-int ndeps;
-
 /*Component init info*/
-
 #define INIT_STR_SZ 52
-
 struct component_init_str {
         unsigned int spdid, schedid;
         int startup;
@@ -81,14 +71,11 @@ boot_find_cobjs(struct cobj_header *h, int n)
 	start = (vaddr_t)h;
 	hs[0] = h;
 
-	//this walks hs[] through the list of objects
-	//becasue we only have one object, it's already set to right addr
 	for (i = 1 ; i < n ; i++) {
 		int j = 0, size = 0, tot = 0;
 
 		size = h->size;
 		for (j = 0 ; j < (int)h->nsect ; j++) {
-	//		printc("\tsection %d, size %d\n", j, cobj_sect_size(h, j));
 			tot += cobj_sect_size(h, j);
 		}
 		printc("cobj %s:%d found at %p:%x, size %x -> %x\n",
@@ -99,7 +86,6 @@ boot_find_cobjs(struct cobj_header *h, int n)
 		start = end;
 	}
 	
-	//set the hs[n] to null so we can loop through easily later
 	hs[n] = NULL;
 	printc("cobj %s:%d found at %p -> %x\n",
 	       hs[n-1]->name, hs[n-1]->id, hs[n-1], cobj_sect_get(hs[n-1], 0)->vaddr);
@@ -178,64 +164,6 @@ boot_process_cinfo(struct cobj_header *h, spdid_t spdid, vaddr_t heap_val,
 }
 
 static int
-boot_comp_map_memory(struct cobj_header *h, spdid_t spdid, pgtblcap_t pt)
-{
-	int i, j;
-	int flag;
-	vaddr_t dest_daddr, prev_map = 0;
-	int tot = 0, n_pte = 1;	
-	
-	struct cobj_sect *sect = cobj_sect_get(h, 0);
-	
-	/*Expand Page table, could do this faster*/
-	for(j = 0; j < (int)h->nsect; j++){
-		tot += cobj_sect_size(h, j);
-	}
-	printc("tot: %d\n", tot);
-	if (tot > SERVICE_SIZE) {
-		n_pte = tot / SERVICE_SIZE;
-		if(tot % SERVICE_SIZE) n_pte++;
-	}	
-	for(j = 0; j < n_pte; j++){
-		if (!__bump_mem_expand_range(&boot_info, pt, sect->vaddr, SERVICE_SIZE)) BUG();
-	}
-
-	/* We'll map the component into booter's heap. */
-	comp_cap_info[spdid].vaddr_mapped_in_booter = (vaddr_t)cos_get_heap_ptr();
-	
-	for (i = 0 ; i < h->nsect ; i++) {
-		int left;
-
-		sect = cobj_sect_get(h, i);
-		flag = MAPPING_RW;
-		if (sect->flags & COBJ_SECT_KMEM) {
-			flag |= MAPPING_KMEM;
-		}
-
-		dest_daddr = sect->vaddr;
-		left       = cobj_sect_size(h, i);
-		
-		/* previous section overlaps with this one, don't remap! */
-		if (round_to_page(dest_daddr) == prev_map) {
-			left -= (prev_map + PAGE_SIZE - dest_daddr);
-			dest_daddr = prev_map + PAGE_SIZE;
-		}
-
-		while (left > 0) {
-			vaddr_t addr = cos_page_bump_alloc(&boot_info);
-			assert(addr);
-			
-			if (cos_mem_alias_at(&comp_cap_info[spdid].cos_compinfo, dest_daddr, &boot_info, addr)) BUG();
-			prev_map = dest_daddr;
-			dest_daddr += PAGE_SIZE;
-			left       -= PAGE_SIZE;
-		}
-	}
-
-	return 0;
-}
-
-static int
 boot_comp_map_populate(struct cobj_header *h, spdid_t spdid, vaddr_t comp_info, int first_time)
 {
 	unsigned int i;
@@ -294,8 +222,6 @@ boot_comp_map(struct cobj_header *h, spdid_t spdid, vaddr_t comp_info, pgtblcap_
 	return 0;
 }
 
-
-
 static void
 boot_create_cap_system(void)
 {
@@ -320,7 +246,6 @@ boot_create_cap_system(void)
 		sect = cobj_sect_get(h, 0);
 		comp_cap_info[spdid].addr_start = sect->vaddr;
 		
-
 		ct = cos_captbl_alloc(&boot_info);
 		assert(ct);	
 		pt = cos_pgtbl_alloc(&boot_info);
@@ -336,17 +261,28 @@ boot_create_cap_system(void)
 		cc = cos_comp_alloc(&boot_info, ct, pt, (vaddr_t)comp_cap_info[spdid].upcall_entry);
 		assert(cc);	
 		comp_cap_info[spdid].cos_compinfo.comp_cap = cc;
+	
+		/* Create sinv capability from Userspace to Booter components */
+		/* Need id 1 because we need to wait for id 0 to finish initializing */
+		sinvcap_t sinv;
 
-		printc("\nComp %d (%s) activated @ %x!\n\n", h->id, h->name, sect->vaddr);
+		sinv = cos_sinv_alloc(&boot_info, boot_info.comp_cap, (vaddr_t)__inv_test_entry);
+		assert(sinv > 0);
+		printc("sinv: %d\n", sinv);
+
+		/* Copy into vm0 capability table at a known location */
+		cos_cap_cpy_at(&comp_cap_info[spdid].cos_compinfo, BOOT_SINV_CAP, &boot_info, sinv);
+
+		printc("Comp %d (%s) activated @ %x!\n", h->id, h->name, sect->vaddr);
 		
 		thdcap_t main_thd = cos_initthd_alloc(&boot_info, cc);
 		assert(main_thd);
+		
 		i = 0;
 		while(schedule[i] != NULL){
 			i++;
 		}
 		schedule[i] = main_thd;
-		//cos_thd_switch(main_thd);
 	}
 
 	return;
@@ -356,7 +292,7 @@ void
 cos_init(void)
 {
 
-	prints("Booter for new kernel\n");
+	printc("Booter for new kernel\n");
 
  	struct cobj_header *h;
 	int num_cobj, i;
@@ -381,14 +317,8 @@ cos_init(void)
 			(vaddr_t)cos_get_heap_ptr(), BOOT_CAPTBL_FREE, 
 			(vaddr_t)BOOT_MEM_SHM_BASE, &boot_info);
 
-
-	//printc("header %p, size %d, num comps %d, new heap %p\n",
-	//      h, h->size, num_cobj, cos_get_heap_ptr());
-
 	boot_create_cap_system();
 	printc("booter: done creating system.\n");
 
-	//boot_deps_run();
-	
 }
 

@@ -1,5 +1,5 @@
 C_OBJS=ppos_booter.o
-ASM_OBJS=
+ASM_OBJS=inv.o
 COMPONENT=ppos_boot.o
 INTERFACES=
 DEPENDENCIES=
