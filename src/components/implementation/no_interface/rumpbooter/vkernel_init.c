@@ -300,6 +300,7 @@ void
 costop(void)
 {
 #if defined(PRINT_CPU_USAGE)
+#if defined(__SIMPLE_DISTRIBUTED_TCAPS__)
 	cycles_t cycs_per_sec = ((cycles_t)(cycs_per_usec)) * 1000 * 1000;
 	static cycles_t curr_tsc = 0, prev_tsc = 0, total_tsc = 0;
 	cycles_t elapsed_tsc = 0;
@@ -335,6 +336,50 @@ costop(void)
 		}
 	}
 	prev_tsc = curr_tsc;
+#elif defined(__SIMPLE_XEN_LIKE_TCAPS__)
+	cycles_t cycs_per_sec = ((cycles_t)(cycs_per_usec)) * 1000 * 1000;
+	static cycles_t curr_tsc = 0, prev_tsc = 0, total_tsc = 0;
+	cycles_t elapsed_tsc = 0;
+	tcap_res_t cpuvm_curr = 0, cpuvm_last_used = 0;
+	tcap_res_t iovm_curr = 0, iovm_last_used = 0;
+	static cycles_t cpuvm_total = 0, cpuvm_used = 0;
+	static cycles_t dom0_total = 0, dom0_used = 0;
+	static cycles_t iovm_total = 0, iovm_used = 0;
+	
+	rdtscll(curr_tsc);
+	cpuvm_curr = (tcap_res_t)cos_introspect(&vkern_info, vminittcap[CPU_BOUND_VM], TCAP_GET_BUDGET);
+	iovm_curr = (tcap_res_t)cos_introspect(&vkern_info, vminittcap[IO_BOUND_VM], TCAP_GET_BUDGET);
+	if (prev_tsc) {
+		cpuvm_total += (cycles_t)cpuvm_credits;
+		iovm_total += (cycles_t)iovm_credits;
+
+		elapsed_tsc = (curr_tsc - prev_tsc);
+		total_tsc += elapsed_tsc;
+		//elapsed_tsc -= ((elapsed_tsc * 3)/ 10); /* lets say, 30% of total cycles - lost in translation */
+		cpuvm_last_used = (cpuvm_credits - cpuvm_curr);
+		iovm_last_used = (iovm_credits - iovm_curr);
+
+		cpuvm_used += ((cycles_t)cpuvm_last_used);
+		iovm_used += ((cycles_t)iovm_last_used);
+		/* Amount of time in DOM0 and VM1 is the amount of time that VM2 was not running for */
+		dom0_used += (elapsed_tsc - ((cycles_t)cpuvm_last_used + (cycles_t)iovm_last_used));
+
+		if (total_tsc >= cycs_per_sec) {
+			/* print top and clear vals */
+
+			dom0_total = dom0_used;
+			cycles_t total_credit_cycs = dom0_total + iovm_total + cpuvm_total;
+			if (dom0_total) printc("dom0:%u%% ", (unsigned int)((dom0_used * 100) / total_credit_cycs));
+			if (iovm_total) printc("vm1:%u%% ", (unsigned int)((iovm_used * 100) / total_credit_cycs));
+			if (cpuvm_total) printc("vm2:%u%% ", (unsigned int)((cpuvm_used * 100) / total_credit_cycs));
+			printc(" %ums\n", (unsigned int)((total_tsc * 1000) / cycs_per_sec));
+
+			total_tsc = 0;
+			cpuvm_total = cpuvm_used = dom0_total = iovm_total = dom0_used = iovm_used = 0;
+		}
+	}
+	prev_tsc = curr_tsc;
+#endif
 #endif
 	return;
 }

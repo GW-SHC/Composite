@@ -85,9 +85,9 @@ enum vm_credits {
 	VM2_CREDITS  = 5,
 #elif defined(__SIMPLE_XEN_LIKE_TCAPS__)
 	DOM0_CREDITS = 0, // not used, DOM0 gets INF budget.. But this is required for cpu usage calc. (assuming dom0 is 50% & vm1 + vm2 = 50%) 
-	VM1_CREDITS  = 4,
-	IO_BOOST_CREDITS = 1,
-	VM2_CREDITS  = 4,
+	VM1_CREDITS  = 5,
+	IO_BOOST_CREDITS = 2,
+	VM2_CREDITS  = 5,
 #endif
 };
 
