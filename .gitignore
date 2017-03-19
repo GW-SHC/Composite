@@ -15,10 +15,11 @@
 .fn_exports
 .exported_interfaces
 composite_new
+*.out
 tags
 src/kernel/include/shared/cpu_ghz.h
 src/Makefile.cosconfig
-src/PLATFORM_ID
+src/platform_info
 modules.order
 .depend
 *.img
