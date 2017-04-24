@@ -96,7 +96,7 @@ cos_shmem_send(void * buff, unsigned int size, unsigned int srcvm, unsigned int 
 	if (!srcvm) {
 		/* TODO: Before sending a event to the VM, first see if we can account for the time spent in i/o  processing */
 		//printc("%s = s:%d d:%d\n", __func__, srcvm, dstvm);
-		if(cos_asnd(sndcap, 1)) assert(0);
+		if(cos_asnd(sndcap, 0)) assert(0);
 
 		/* deficit accounting.. for now: round robin between tcaps */
 		cos_vio_tcap_update(dstvm);
@@ -144,17 +144,32 @@ cos_irqthd_handler(void *line)
 	static cycles_t prev = 0;
 	cycles_t now = 0;
 
+	static int count = 0;
+	cycles_t budget;
+	char buff [4];
 	while(1) {
 		int pending = cos_rcv(arcvcap);
+//		printc("HPET: %d\n", (int)line);
 
 		if ((int)line == 0) {
-			rdtscll(now);
+		//	rdtscll(now);
 		//	if (prev && !cycles_same(now-prev, PERIOD*cycs_per_usec, (1<<12))) {
 		//		printc("OVER by %llu! ", (now - prev) / (cycs_per_usec));
 		//	}
-			prev = now;
-			
+		//	prev = now;
+			count++;
+			if (count % 1000 == 0) {
+				printc("cnt:%d\n", count);
+			}	
 			sndcap = VM0_CAPTBL_SELF_IOASND_SET_BASE + (DL_VM - 1) * CAP64B_IDSZ;
+		
+			tcap_res_t budget = (tcap_res_t)cos_introspect(&booter_info, VM0_CAPTBL_SELF_IOTCAP_SET_BASE + CAP16B_IDSZ, TCAP_GET_BUDGET);
+			if (budget >= 10000*cycs_per_usec) {
+				//printc("transfering back to dlvm\n");
+				//cos_tcap_delegate(sndcap, VM0_CAPTBL_SELF_IOTCAP_SET_BASE + CAP16B_IDSZ, 8000*cycs_per_usec, DLVM_PRIO, 0);
+				//continue;
+			}
+			
 			if(cos_asnd(sndcap, 0)) assert(0);
 		}else {
 			//tcap_res_t budget = (tcap_res_t)cos_introspect(&booter_info, BOOT_CAPTBL_SELF_INITTCAP_BASE, TCAP_GET_BUDGET);
@@ -377,7 +392,7 @@ print_cycles(void)
 			printc("vm%d: %lu\n", vmid, mainbud);
 		} else if (vmid == 0) {
 			mainbud = (tcap_res_t)cos_introspect(&booter_info, BOOT_CAPTBL_SELF_INITTCAP_BASE, TCAP_GET_BUDGET);
-			isrbud  = (tcap_res_t)cos_introspect(&booter_info, irq_tcap[HW_ISR_FIRST], TCAP_GET_BUDGET);
+			isrbud  = (tcap_res_t)cos_introspect(&booter_info, irq_tcap[HW_ISR_FIRST+1], TCAP_GET_BUDGET);
 			viobud  = (tcap_res_t)cos_introspect(&booter_info, vio_tcap[IO_BOUND_VM - 1], TCAP_GET_BUDGET);
 			printc("dom0: %lu\n", mainbud + isrbud + viobud);
 			printc("dom0: %lu\n", mainbud);
@@ -426,7 +441,7 @@ cos_resume(void)
 			do {
 				pending = cos_sched_rcv(BOOT_CAPTBL_SELF_INITRCV_BASE, &tid, &blocked, &cycles);
 				assert(pending <= 1);
-
+				
 				irq_line = intr_translate_thdid2irq(tid);
 				if ((int)irq_line == 0) continue;
 

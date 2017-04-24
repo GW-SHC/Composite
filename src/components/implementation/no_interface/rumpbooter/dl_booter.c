@@ -55,7 +55,7 @@ void
 dl_work_two(void * ignore)
 {
 	while(1) {
-		spin_usecs(4000);
+		spin_usecs(2000);
 		cos_thd_switch(BOOT_CAPTBL_SELF_INITTHD_BASE);
 	}
 }
@@ -79,24 +79,27 @@ test_deadline(thdcap_t dl_wrk_thd1, thdcap_t dl_wrk_thd2) {
 	cycles_t then;
 	rdtscll(then);
 
-	cos_thd_switch(dl_wrk_thd1);
+//	cos_thd_switch(dl_wrk_thd1);
+
+	spin_usecs(2000);
+	spin_usecs(2000);
 
 	rdtscll(now);
 	
 	if (deadline == 0) deadline = hpet_first_period() + (PERIOD*cycs_per_usec);
 	else deadline = deadline + (PERIOD*cycs_per_usec);
 
-	static cycles_t now_f, then_f, dl_f;
-	if (periods == 0) {
-		now_f = now;
-		then_f = then;
-		dl_f = deadline;
-	}
-	if (periods == 2000) {
-		printc("first hpet: %llu \ndl: %llu now: %llu then: %llu spun: %llu \n", hpet_first_period(), dl_f, now_f, then_f, (now_f - then_f)/cycs_per_usec );
-		printc("first hpet: %llu \ndl: %llu now: %llu then: %llu spun: %llu \n", hpet_first_period(), deadline, now, then, (now - then)/cycs_per_usec );
-//		while(1);
-	}
+//	static cycles_t now_f, then_f, dl_f;
+//	if (periods == 0) {
+//		now_f = now;
+//		then_f = then;
+//		dl_f = deadline;
+//	}
+//	if (periods == 2000) {
+//		printc("first hpet: %llu \ndl: %llu now: %llu then: %llu spun: %llu \n", hpet_first_period(), dl_f, now_f, then_f, (now_f - then_f)/cycs_per_usec );
+//		printc("first hpet: %llu \ndl: %llu now: %llu then: %llu spun: %llu \n", hpet_first_period(), deadline, now, then, (now - then)/cycs_per_usec );
+////		while(1);
+//	}
 	//if( !cycles_same(now-then, 2000*cycs_per_usec, (1<<10) ) ) printc("%llu \n", now - then);
 
 	if (now > deadline) {
@@ -114,23 +117,22 @@ check_delegate(void) {
 		cycles_t now;
 		rdtscll(now);
 		//tcap_res_t min = VIO_BUDGET_APPROX * cycs_per_usec;
-		tcap_res_t min = PERIOD * 10;
+		tcap_res_t min = 1000*cycs_per_usec;
 
 		if (periods % 1 == 0) {
 
-			rdtscll(last);
 			tcap_res_t budget = (tcap_res_t)cos_introspect(&booter_info, BOOT_CAPTBL_SELF_INITTCAP_BASE, TCAP_GET_BUDGET);
 			tcap_res_t res;
 			
-			if (budget >= min) { res = budget/2; }
+			if (budget >= min) { res = min; }
 			else {
-				printc("DL_VM budget too low\n");
+		//		printc("DL_VM budget too low\n");
 				return; /* 0 = 100% budget */
 			}
 			
-			if (periods == 1) printc("delegating to hpet, periods passed: %lu\n", budget/2);
+		//	if (periods == 1) printc("delegating to hpet, periods passed: %lu\n", budget/2);
 
-			if(cos_tcap_delegate(VM_CAPTBL_SELF_IOASND_BASE, BOOT_CAPTBL_SELF_INITTCAP_BASE, res, HPET_PRIO, 0)) assert(0);
+			if(cos_tcap_delegate(VM_CAPTBL_SELF_IOASND_BASE, BOOT_CAPTBL_SELF_INITTCAP_BASE, res, DLVM_PRIO, 0)) assert(0);
 		}
 #endif
 }
@@ -141,27 +143,40 @@ dl_booter_init(void)
 	printc("DL_BOOTER_INIT: %d\n", vmid);
 	assert(cycs_per_usec);
 	thdcap_t dl_wrk_thd1, dl_wrk_thd2;
+	cycles_t now;
+	int ret = 0;
 
 	dl_wrk_thd1 = cos_thd_alloc(&booter_info, booter_info.comp_cap, dl_work_one, (thdcap_t *) &dl_wrk_thd2);
 	assert(dl_wrk_thd1);
 	
 	dl_wrk_thd2 = cos_thd_alloc(&booter_info, booter_info.comp_cap, dl_work_two, NULL);
 	assert(dl_wrk_thd2);
-	
+	int test = (thdid_t)cos_introspect(&booter_info, dl_wrk_thd2, THD_GET_TID);
+
 #if defined(__SIMPLE_DISTRIBUTED_TCAPS__)
-	rdtscll(last);
 	/*Use HPET PRIO*/
-	if(cos_tcap_delegate(VM_CAPTBL_SELF_IOASND_BASE, BOOT_CAPTBL_SELF_INITTCAP_BASE, 10000, HPET_PRIO, 0)) assert(0);
-#endif	
+	if(cos_tcap_delegate(VM_CAPTBL_SELF_IOASND_BASE, BOOT_CAPTBL_SELF_INITTCAP_BASE, 4000*cycs_per_usec, DLVM_PRIO, 0)) assert(0);
+#endif
+        cycles_t first = 0;
+	cycles_t hpets = 0;
 
 	while(1) {
-		cos_rcv(BOOT_CAPTBL_SELF_INITRCV_BASE);
+		ret = cos_rcv(BOOT_CAPTBL_SELF_INITRCV_BASE);
+		if (!first ) first = hpet_first_period();
 		//printc("w\n");
-		test_deadline(dl_wrk_thd1, dl_wrk_thd2);	
-		periods++;
-		if (periods % 2000 == 0) {
-			printc("dl_missed: %d   dl_made: %d, dl: %llu \n", dls_missed, dls_made, deadline);
+		
+		rdtscll(last);
+		hpets = (last - first)/(PERIOD*cycs_per_usec);
+
+		if (periods % 1000 == 0) {
+			//printc(": %llu \n", hpets);
+			printc("%d : %llu \n", periods, hpets);
+			printc("pds: %d dl_missed: %d   dl_made: %d, dl: %llu \n", periods, dls_missed, dls_made, deadline);
 		}
+		
+		test_deadline(dl_wrk_thd1, dl_wrk_thd2);	
+	
+		periods++;
 #if defined(__SIMPLE_DISTRIBUTED_TCAPS__)
 		check_delegate();
 #endif	

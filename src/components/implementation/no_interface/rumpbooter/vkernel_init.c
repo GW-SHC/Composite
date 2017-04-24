@@ -144,7 +144,10 @@ vm0_io_fn(void *d)
 	//	tcap_res_t budget = (tcap_res_t)cos_introspect(&vkern_info, vm0_io_tcap[DL_VM-1], TCAP_GET_BUDGET);
 	//       if(budget < 60000) printc("budget: %lu\n", budget);
 	//	printc("line %d\n", (int)line);
-		if (line == 0) continue;
+		if (line == 0) {
+			//cos_switch(BOOT_CAPTBL_SELF_INITTHD_BASE, BOOT_CAPTBL_SELF_INITTCAP_BASE, DLVM_PRIO, 0, 0, cos_sched_sync());
+			continue;
+		}
 		intr_start(irqline);
 		bmk_isr(line);
 		cos_vio_tcap_set((int)d);
@@ -177,24 +180,18 @@ setup_credits(void)
 		if (vmstatus[i] != VM_EXITED) {
 			switch (i) {
 				case 0:
-#if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
 					vmcredits[i] = (DOM0_CREDITS * VM_TIMESLICE * cycs_per_usec);
-					total_credits += vmcredits[i];
-#elif defined(__SIMPLE_XEN_LIKE_TCAPS__)
-					vmcredits[i] = TCAP_RES_INF;
 					total_credits += (DOM0_CREDITS * VM_TIMESLICE * cycs_per_usec);
-#endif
 					break;
 				case 1:
 					vmcredits[i] = (VM1_CREDITS * VM_TIMESLICE * cycs_per_usec);
-					total_credits += vmcredits[i];
+					total_credits += (VM1_CREDITS * VM_TIMESLICE * cycs_per_usec);
 					break;
 				case 2:
-					//vmcredits[i] = (VM2_CREDITS * VM_TIMESLICE * cycs_per_usec);
-					vmcredits[i] = TCAP_RES_INF;
-					total_credits += vmcredits[i];
+					vmcredits[i] = (VM2_CREDITS * VM_TIMESLICE * cycs_per_usec);
+					total_credits += (VM2_CREDITS * VM_TIMESLICE * cycs_per_usec);
 					break;
-				default:
+				default: assert(0);
 					vmcredits[i] = VM_TIMESLICE;
 					break;
 			}
@@ -208,51 +205,24 @@ reset_credits(void)
 	struct vm_node *vm;
 	int i;
 
-	for (i = 0 ; i < COS_VIRT_MACH_COUNT ; i ++)
+	for (i = 0 ; i < COS_VIRT_MACH_COUNT ; i ++) {
+		if (vmstatus[i] != VM_BLOCKED)
+			vmstatus[i] = VM_RUNNING;
 		vm_cr_reset[i] = 1;
-
-#if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
-	while ((vm = vm_next(&vms_expended)) != NULL) {
-		vm_deletenode(&vms_expended, vm);
-		vm_insertnode(&vms_runqueue, vm);
 	}
-#elif defined(__SIMPLE_XEN_LIKE_TCAPS__)
-	while ((vm = vm_next(&vms_over)) != NULL) {
-		vm_deletenode(&vms_over, vm);
-		vm_insertnode(&vms_under, vm);
-	}
-#endif
 }
 
 void
 fillup_budgets(void)
 {
-	int i = 0;
-
-#if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
-	for (i = 0 ; i < COS_VIRT_MACH_COUNT ; i ++)
-	{
-		if (i == DL_VM) vmprio[i] = PRIO_HIGH;
-		vmprio[i]   = PRIO_LOW;
-		vm_cr_reset[i] = 1;
-	}
-#elif defined(__SIMPLE_XEN_LIKE_TCAPS__)
 	vmprio[0] = DOM0_PRIO;
 	vm_cr_reset[0] = 1;
-	//vm_deletenode(&vms_under, &vmnode[0]);
-	//vm_insertnode(&vms_boost, &vmnode[0]);
 	
 	vmprio[1] = NWVM_PRIO;
 	vm_cr_reset[1] = 1;
-	//vm_deletenode(&vms_under, &vmnode[1]);
-	//vm_insertnode(&vms_boost, &vmnode[1]);
 
-	for (i = 2 ; i < COS_VIRT_MACH_COUNT ; i ++)
-	{
-		vmprio[i]   = DLVM_PRIO;
-		vm_cr_reset[i] = 1;
-	}
-#endif
+	vmprio[2]   = DLVM_PRIO;
+	vm_cr_reset[2] = 1;
 }
 
 /*
@@ -309,7 +279,7 @@ boot_dlvm_sched_fn(int index, tcap_res_t budget)
 	//	}
 		// ideal case
 		printc("DLVM BOOT SCHED\n");
-		cos_switch(vm_main_thd[index], vminittcap[index], vmprio[index], 0, sched_rcv, cos_sched_sync());
+		//cos_switch(vm_main_thd[index], vminittcap[index], vmprio[index], 0, sched_rcv, cos_sched_sync());
 	} else {
 			//printc("DLVM BOOT TRANSFER\n");
 			if ((cos_tcap_transfer(vminitrcv[index], sched_tcap, timeslice-budget, vmprio[index]))) {
@@ -317,6 +287,7 @@ boot_dlvm_sched_fn(int index, tcap_res_t budget)
 				assert(0);
 			}
 			// ideal case
+			//printc("cos_switch a lil earlier\n");
 			cos_switch(vm_main_thd[index], vminittcap[index], vmprio[index], 0, sched_rcv, cos_sched_sync());
 	}
 
@@ -325,6 +296,34 @@ boot_dlvm_sched_fn(int index, tcap_res_t budget)
 
 uint64_t t_vm_cycs  = 0;
 uint64_t t_dom_cycs = 0;
+
+static void
+chk_replenish_budgets(void)
+{
+	int i;
+	static cycles_t last_replenishment = 0;
+	cycles_t now;
+
+	rdtscll(now);
+
+	//printc("Now %llu last: %llu ttl: %llu diff: %llu \n", now, last_replenishment, total_credits, now-last_replenishment);
+	if (last_replenishment == 0 || (now - last_replenishment) >= total_credits) {
+
+		rdtscll(last_replenishment);
+	//	printc("Repl %llu\n", now);
+		for (i = 0 ; i < COS_VIRT_MACH_COUNT ; i++) {
+			tcap_res_t budget = 0, transfer_budget = 0;
+
+			budget = (tcap_res_t)cos_introspect(&vkern_info, vminittcap[i], TCAP_GET_BUDGET);
+			transfer_budget = vmcredits[i] - budget;
+
+			if (TCAP_RES_IS_INF(budget) || budget > vmcredits[i]) continue;
+
+	//		printc("%d = %lu\n", i, transfer_budget);
+			if ((cos_tcap_transfer(vminitrcv[i], sched_tcap, transfer_budget, vmprio[i]))) assert(0);
+		}
+	}
+}
 
 #define YIELD_CYCS 10000
 void
@@ -347,6 +346,7 @@ sched_fn(void *x)
 	unsigned int counter                    = 0;
 	cycles_t start                          = 0;
 	cycles_t end                            = 0;
+	int sched_index = 0;
 
 	memset(cpu_usage, 0, sizeof(cpu_usage));
 	memset(cpu_cycs, 0, sizeof(cpu_cycs));
@@ -355,355 +355,126 @@ sched_fn(void *x)
 	printc("Scheduling VMs(Rumpkernel contexts)....\n");
 	memset(vm_bootup, 0, sizeof(vm_bootup));
 
-#if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
+
+	chk_replenish_budgets();
+	boot_dlvm_sched_fn(2, (tcap_res_t)cos_introspect(&vkern_info, vminittcap[2], TCAP_GET_BUDGET));
 	while (ready_vms) {
 		struct vm_node *x, *y;
 		unsigned int count_over = 0;
 		int ret;
+		tcap_res_t budget = 0;
+		int send          = 1;
+		int pending;
+		tcap_res_t sched_budget = 0, transfer_budget = 0;
+		tcap_res_t min_budget = VM_MIN_TIMESLICE * cycs_per_usec;
+		int index = sched_index;
+		static int b_cnt = 0;
+		static int c_cnt = 0;
+		sched_index ++;
+		sched_index %= COS_VIRT_MACH_COUNT;
 
-		while ((x = vm_next(&vms_runqueue)) != NULL) {
-			int index         = x->id;
-			tcap_res_t budget = 0;
-			int send          = 1;
-			tcap_res_t sched_budget = 0, transfer_budget = 0;
-			tcap_res_t min_budget = VM_MIN_TIMESLICE * cycs_per_usec;
+//		do {
+//			pending = cos_sched_rcv(sched_rcv, &tid, &blocked, &cycles);
+//
+//			if (!tid || tid != vm_main_thdid[DL_VM]) continue;
+//			
+//			/* if a VM is blocked.. just move it to the end of the queue..*/
+//			if (blocked) {
+//				//printc("dlvm blocked\n");
+//				vmstatus[DL_VM] = VM_BLOCKED;
+//			} else {
+//				vmstatus[DL_VM] = VM_RUNNING;
+//			}
+//		} while (pending);
+		
+		while (cos_sched_rcv(sched_rcv, &tid, &blocked, &cycles));
+		
+		budget = (tcap_res_t)cos_introspect(&vkern_info, vminittcap[index], TCAP_GET_BUDGET);
+		if (index != DL_VM && !bootup_sched_fn(index, budget)) continue;
 
-			if (unlikely(vmstatus[index] == VM_EXITED)) {
-				if (index == 1) {
-				       	printc("exiting VM%d\n", index);
-					while(1);
-				}
-				vm_deletenode(&vms_runqueue, x); 
-				vm_insertnode(&vms_exit, x);
-				continue;
+		chk_replenish_budgets();
+
+		if (unlikely(vmstatus[index] == VM_EXITED)) {
+			if (index == 1) {
+				printc("exiting VM%d\n", index);
+				while(1);
 			}
+			continue;
+		}
 
+		if (index != DL_VM) {
 			budget = (tcap_res_t)cos_introspect(&vkern_info, vminittcap[index], TCAP_GET_BUDGET);
-			sched_budget = (tcap_res_t)cos_introspect(&vkern_info, sched_tcap, TCAP_GET_BUDGET);
-			
-			if (index != DL_VM && !bootup_sched_fn(index, budget)) continue;
-			else if (!boot_dlvm_sched_fn(index, budget)) continue;
+			//assert(budget);
+			if (!budget) continue;
+			if (cos_asnd(vksndvm[index], 1)) assert(0);
+		}
+#if 0
+		budget = (tcap_res_t)cos_introspect(&vkern_info, vminittcap[index], TCAP_GET_BUDGET);
+		sched_budget = TCAP_RES_INF;
+		//sched_budget = (tcap_res_t)cos_introspect(&vkern_info, sched_tcap, TCAP_GET_BUDGET);
 
-			if (cycles_same(budget, 0, VK_CYCS_DIFF_THRESH) && !vm_cr_reset[index]) {
-				vm_deletenode(&vms_runqueue, &vmnode[index]);
-				vm_insertnode(&vms_expended, &vmnode[index]);
-				count_over ++;
+		if (index != DL_VM && !bootup_sched_fn(index, budget)) continue;
+//		else if (!boot_dlvm_sched_fn(index, budget)) continue;
 
-				if (count_over == ready_vms) {
-					reset_credits();
-					count_over = 0;
-					no_vms = 0;
-					if (done_printing) {
-						memset(cpu_cycs, 0, sizeof(cpu_cycs));
-						memset(cpu_usage, 0, sizeof(cpu_usage));
-						done_printing = 0;
-					}
-				} else {
-					continue;
-				}
-			} 
+		if (cycles_same(budget, 0, VK_CYCS_DIFF_THRESH) && !vm_cr_reset[index]) {
+			if(vmstatus[index] != VM_BLOCKED) 
+				vmstatus[index] = VM_EXPENDED;
+			count_over ++;
 
-			if (vm_cr_reset[index]) {
-				send = 0;
-
-				transfer_budget = vmcredits[index] - budget;
-				if (sched_budget <= (transfer_budget + min_budget)) {
-					transfer_budget = 0;
-				}
-
-				if (sched_budget == 0) { 
-					send = 1;
-				} else {
-					no_vms ++;
-					vm_cr_reset[index] = 0;
-				}
-			}
-			if (TCAP_RES_IS_INF(budget)) send = 1;
-
-			rdtscll(start);
-			if (send) {
-				if (index == DL_VM) {
-				// ideal case
-			//		ret = cos_switch(vm_main_thd[index], vminittcap[index], vmprio[index], 0, sched_rcv, cos_sched_sync());
-					//assert(ret == 0);
-				}
-				else {
-					if (cos_asnd(vksndvm[index], 1)) assert(0);
-				}
-			} else {
-				//printc("%d b:%lu t:%lu\n", index, budget, transfer_budget);
-				/*if (index == IO_BOUND_VM || index == 0) cpu_cycs[IO_BOUND_VM] += vmcredits[index];
-				else*/ cpu_cycs[index] += vmcredits[index];
-				
-				/* IF DL_VM, just do transfer 
-				 * 
-				 * */
-				if (index == DL_VM) {
-					printc("transfering\n");
-					if ((ret = cos_tcap_transfer(vminitrcv[index], sched_tcap, transfer_budget, vmprio[index]))) {
-						printc("\tTcap transfer failed %d\n", ret);
-						assert(0);
-					}
-					// ideal case
-					// cos_switch(vm_main_thd[index], vminittcap[index], vmprio[index], 0, sched_rcv, cos_sched_sync());
-				}else {
-					if (index == 1) {
-					       	//printc("delegating to VM%d\n", index);
-					//	while(1);
-					}
-					if (cos_tcap_delegate(vksndvm[index], sched_tcap, transfer_budget, vmprio[index], TCAP_DELEG_YIELD)) assert(0);
-				}
-			}
-			rdtscll(end);
-
-#if defined(PRINT_CPU_USAGE)
-			tcap_res_t cpu_bound_usage = 0;
-			tcap_res_t total_usage = (end - start);
-
-			if (index == CPU_BOUND_VM) {
-				tcap_res_t now;
-
-				now = (tcap_res_t)cos_introspect(&vkern_info, vminittcap[index], TCAP_GET_BUDGET);
-				if (now != 0) {
-					printc("%lu\n", now); assert(0);
-				}
-				cpu_bound_usage = (transfer_budget + budget - now); /* get used amount of budget in cycles */
-				cpu_usage[index] += cpu_bound_usage;
-
-				cpu_usage[IO_BOUND_VM] += (total_usage - cpu_bound_usage); /* get time spent outside cpu bound vm */
-			} else {
-				if (index == 0 && total_usage < YIELD_CYCS)
-					cpu_usage[index] += total_usage;
-				else
-					cpu_usage[IO_BOUND_VM] += total_usage;
-			}
-			total_cycs += total_usage;
-
-			if (total_cycs >= cycs_per_sec) {
-				int i;
-
-				//assert(cpu_cycs[0] == 0 && cpu_usage[0] == 0);
-
-				for (i = 1 ; i < COS_VIRT_MACH_COUNT ; i ++) {
-					unsigned int vm_usage = (unsigned int)((cpu_usage[i] * 100) / cpu_cycs[i]);
-					if (cpu_cycs[i]) printc("vm%d:%u%% ", i, vm_usage);
-				}
-				printc(" / %us\n", (unsigned int)((total_cycs) / cycs_per_sec));
-				total_cycs = 0;
-				
-				done_printing = 1;
-			}
-#endif
-
-			if (no_vms == COS_VIRT_MACH_COUNT) total_cycles += (end - start);
-			if (total_cycles >= total_credits) {
+			if (count_over == ready_vms) {
 				reset_credits();
 				count_over = 0;
 				no_vms = 0;
-				total_cycles = 0;
-
-				if (done_printing) {
-					memset(cpu_cycs, 0, sizeof(cpu_cycs));
-					memset(cpu_usage, 0, sizeof(cpu_usage));
-					done_printing = 0;
-				}
-			}
-
-			while (cos_sched_rcv(sched_rcv, &tid, &blocked, &cycles)) {
-				/* if a VM is blocked.. just move it to the end of the queue..*/
-				if (tid && blocked) {
-					int i;
-	
-					for (i = 0 ; i < COS_VIRT_MACH_COUNT ; i ++) {
-						if (vm_main_thdid[i] == tid) {
-							if (i == DL_VM) {
-								
-								if (vm_container(&vmnode[i]) == &vms_runqueue) {
-									//printc("deleting runqueue\n");
-									vm_deletenode(&vms_runqueue, &vmnode[i]);
-								}
-								continue;
-							}
-							if (x->prev != &vmnode[i]) {
-								/* push it to the end of the queue.. */
-								//vm_deletenode(&vms_runqueue, &vmnode[i]);
-								//vm_insertnode(&vms_runqueue, &vmnode[i]);
-							}	
-						}
-					}
-				} else if (tid && !blocked) {
-					if (vm_main_thdid[DL_VM] == tid) {
-						if (vm_container(&vmnode[DL_VM]) == &vms_runqueue) {
-						//	printc("reinsert %d\n", DL_VM);
-							vm_cleannode(&vmnode[DL_VM]);
-							vm_insertnode(&vms_runqueue, &vmnode[DL_VM]);	
-						}
-						continue;
-					}
-				}	
-			}
-
-		}
-	}
-#elif defined(__SIMPLE_XEN_LIKE_TCAPS__)
-	while (ready_vms) {
-		struct vm_node *x, *y;
-		unsigned int count_over = 0;
-		tcap_res_t dom0_max = DOM0_CREDITS * VM_TIMESLICE * cycs_per_usec;
-
-#if 0
-		while ((x = vm_next(&vms_boost)) != NULL) { /* if there is at least one element in boost prio.. */
-			int index = x->id;
-
-			if (unlikely(vmstatus[index] == VM_EXITED)) {
-				vm_deletenode(&vms_boost, x); 
-				vm_insertnode(&vms_exit, x);
-				continue;
-			}
-			/* TODO: if boosted prio, do I care about the budgets, credits etc? */
-			//printc("%s:%d - %d\n", __func__, __LINE__, index);
-			cos_tcap_delegate(vksndvm[index], BOOT_CAPTBL_SELF_INITTCAP_BASE, vmcredits[index], vmprio[index], TCAP_DELEG_YIELD);
-			while (cos_sched_rcv(BOOT_CAPTBL_SELF_INITRCV_BASE, &tid, &blocked, &cycles)) ;
-		}
-#endif
-		tcap_res_t budget = 0;
-		budget = (tcap_res_t)cos_introspect(&vkern_info, vminittcap[2], TCAP_GET_BUDGET);
-		
-		boot_dlvm_sched_fn(2, budget);
-		while ((x = vm_next(&vms_under)) != NULL) {
-			int index         = x->id;
-			tcap_res_t transfer_budget = 0;
-			int send          = 1;
-			budget = 0;
-
-			if (unlikely(vmstatus[index] == VM_EXITED)) {
-				vm_deletenode(&vms_under, x); 
-				vm_insertnode(&vms_exit, x);
-				continue;
-			}
-
-			budget = (tcap_res_t)cos_introspect(&vkern_info, vminittcap[index], TCAP_GET_BUDGET);
-	//		if (budget != 0 && index == DL_VM) continue;
-	//		if (index != DL_VM && !bootup_sched_fn(index, budget)) continue;
-	//		else {
-	//			boot_dlvm_sched_fn(index, budget);
-	//		}
-
-			/* deleting credit elements of schedulign */
-		//	if (index && cycles_same(budget, 0, VK_CYCS_DIFF_THRESH) && !vm_cr_reset[index]) {
-		//		vm_deletenode(&vms_under, &vmnode[index]);
-		//		vm_insertnode(&vms_over, &vmnode[index]);
-		//		count_over ++;
-
-		//		if (count_over == ready_vms - 1) {
-		//			reset_credits();
-		//			count_over = 0;
-		//			no_vms = 0;
-		//		} else {
-		//			continue;
-		//		}
-		//	} 
-
-			//if (vm_cr_reset[index]) {
-			if (budget == 0) {
-				send = 0;
-				no_vms ++;
-				//vm_cr_reset[index] = 0;
-
-				transfer_budget = vmcredits[index] - budget;
-			}
-			if (TCAP_RES_IS_INF(budget)) send = 1;
-
-			rdtscll(start);
-			if (send) {
-				if (index == DL_VM) {
-					//printc("cos_switch to dl_vm\n");
-					cos_switch(vm_main_thd[index], vminittcap[index], vmprio[index], 0, sched_rcv, cos_sched_sync());
-				}
-				else if (cos_asnd(vksndvm[index], 1)) assert(0);
 			} else {
-				if (index == DL_VM) {
-					int ret;
-					if ((ret = cos_tcap_transfer(vminitrcv[index], sched_tcap, transfer_budget, vmprio[index]))) {
-						printc("\tTcap transfer failed %d\n", ret);
-						assert(0);
-					}
-					cos_switch(vm_main_thd[index], vminittcap[index], vmprio[index], 0, sched_rcv, cos_sched_sync());
-				} else if (cos_tcap_delegate(vksndvm[index], sched_tcap, transfer_budget, vmprio[index], TCAP_DELEG_YIELD)) {
+				continue;
+			}
+		} 
+		//if (index != DL_VM && vmstatus[index] != VM_RUNNING) continue;
+
+		if(vm_cr_reset[index]) {
+			send = 0;
+
+			if (TCAP_RES_IS_INF(vmcredits[index])) transfer_budget = vmcredits[index];
+			else 				       transfer_budget = vmcredits[index] - budget;
+
+			no_vms ++;
+			vm_cr_reset[index] = 0;
+		}
+		if (TCAP_RES_IS_INF(budget)) send = 1;
+
+		rdtscll(start);
+		if (send) {
+			//printc(" send = %d ", index);
+			if (index != DL_VM) {
+				if (cos_asnd(vksndvm[index], 1)) assert(0);
+			}
+		} else {
+			//printc(" !send = %d ", index);
+			/* IF DL_VM, just do transfer 
+			 * 
+			 * */
+			if (index == DL_VM) {
+				if ((ret = cos_tcap_transfer(vminitrcv[index], sched_tcap, transfer_budget, vmprio[index]))) {
+					printc("\tTcap transfer failed %d\n", ret);
 					assert(0);
 				}
-			}
-			rdtscll(end);
-
-			if (no_vms == COS_VIRT_MACH_COUNT - 1) total_cycles += (end - start);
-			if (total_cycles >= total_credits) {
-				reset_credits();
-				count_over = 0;
-				no_vms = 0;
-				total_cycles = 0;
-			}
-
-#if defined(PRINT_CPU_USAGE)
-			unsigned int usg;
-
-			if (index) {
-				usg = budget;
-				if (!send) usg += transfer_budget;
 			} else {
-				usg = dom0_max;
-			}
-			usg = ((end - start) * 100) / usg;
-
-			usage[index] += usg;
-			count[index] ++;
-
-			if (index) cpu_cycs[index] = send ? budget : (budget + transfer_budget);
-			else       cpu_cycs[index] = dom0_max;
-			cpu_usage[index] = (end - start);
-			total_cycs      += (end - start);
-
-			if (total_cycs >= cycs_per_sec) {
-				for (j = 0 ; j < COS_VIRT_MACH_COUNT ; j ++) {
-					//if (cpu_cycs[j])
-					//	printc("vm%d:%u%% ", j, (unsigned int)((cpu_usage[j] * 100) / cpu_cycs[j]));
-						//printc("vm%d:%llu:%llu ", j, cpu_usage[j], cpu_cycs[j]);
-
-					if (count[index]) {
-						printc("%d:%u%% ", j, (usage[j] / count[j]));
-					}
-
-					cpu_usage[j] = cpu_cycs[j] = 0;
-					usage[j] = 0;
-					count[j] = 0;
-				}
-				printc("/ %usecs-%u\n", (unsigned int)(total_cycs/cycs_per_sec), counter);
-				total_cycs = 0;
-				counter ++;
-			}
-#endif
-
-			while (cos_sched_rcv(sched_rcv, &tid, &blocked, &cycles)) {
-				/* if a VM is blocked.. just move it to the end of the queue..*/
-				if (tid && blocked) {
-						if (vm_main_thdid[DL_VM] == tid) {
-							if (vm_container(&vmnode[DL_VM]) == &vms_under) {
-								vm_deletenode(&vms_under, &vmnode[DL_VM]);
-								vm_insertnode(&vms_over, &vmnode[DL_VM]);
-							}
-						}
-				} else if (tid && !blocked) {
-					if (vm_main_thdid[DL_VM] == tid) {
-						if (vm_container(&vmnode[DL_VM]) == &vms_over) {
-						//	printc("reinsert %d\n", DL_VM);
-							vm_cleannode(&vmnode[DL_VM]);
-							vm_insertnode(&vms_under, &vmnode[DL_VM]);	
-						}
-					}
-				}	
+				if (cos_tcap_delegate(vksndvm[index], sched_tcap, transfer_budget, vmprio[index], TCAP_DELEG_YIELD)) assert(0);
 			}
 		}
-	}
+		rdtscll(end);
+
+		/* FIXME: will not work if interrupts file and dom0 executes before taking the start tsc. */
+		if (no_vms == COS_VIRT_MACH_COUNT) total_cycles += (end - start);
+		if (total_cycles >= total_credits) {
+			reset_credits();
+			count_over = 0;
+			no_vms = 0;
+			total_cycles = 0;
+		}
+
 #endif
+	}
 }
 
 #if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
@@ -859,7 +630,7 @@ cos_init(void)
 	struct cos_compinfo vmbooter_info[COS_VIRT_MACH_COUNT];
 	struct cos_compinfo vmbooter_shminfo[COS_VIRT_MACH_COUNT];
 	assert(COS_VIRT_MACH_COUNT >= 2);
-
+	int test = 0;
 	printc("Hypervisor:vkernel START\n");
 
 	int i = 0, id = 0, cycs;
@@ -900,12 +671,15 @@ cos_init(void)
 
 	printc("Initializing Timer/Scheduler Thread\n");
 #if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
-	sched_tcap = cos_tcap_alloc(&vkern_info);
-	assert(sched_tcap);
-	sched_thd = cos_thd_alloc(&vkern_info, vkern_info.comp_cap, sched_fn, (void *)0);
-	assert(sched_thd);
-	sched_rcv = cos_arcv_alloc(&vkern_info, sched_thd, sched_tcap, vkern_info.comp_cap, BOOT_CAPTBL_SELF_INITRCV_BASE);
-	assert(sched_rcv);
+//	sched_tcap = cos_tcap_alloc(&vkern_info);
+//	assert(sched_tcap);
+//	sched_thd = cos_thd_alloc(&vkern_info, vkern_info.comp_cap, sched_fn, (void *)0);
+//	assert(sched_thd);
+//	sched_rcv = cos_arcv_alloc(&vkern_info, sched_thd, sched_tcap, vkern_info.comp_cap, BOOT_CAPTBL_SELF_INITRCV_BASE);
+//	assert(sched_rcv);
+	sched_tcap = BOOT_CAPTBL_SELF_INITTCAP_BASE;
+	sched_thd = BOOT_CAPTBL_SELF_INITTHD_BASE;
+	sched_rcv = BOOT_CAPTBL_SELF_INITRCV_BASE;
 #elif defined(__SIMPLE_XEN_LIKE_TCAPS__)
 	sched_tcap = BOOT_CAPTBL_SELF_INITTCAP_BASE;
 	sched_thd = BOOT_CAPTBL_SELF_INITTHD_BASE;
@@ -926,6 +700,7 @@ cos_init(void)
 		vm_exit_thd[id] = cos_thd_alloc(&vkern_info, vkern_info.comp_cap, vm_exit, (void *)id);
 		assert(vm_exit_thd[id]);
 
+		test = (thdid_t)cos_introspect(&vkern_info, vm_exit_thd[id], THD_GET_TID);
 
 		vmct = cos_captbl_alloc(&vkern_info);
 		assert(vmct);
@@ -956,6 +731,11 @@ cos_init(void)
 		vm_main_thd[id] = cos_thd_alloc(&vkern_info, vmbooter_info[id].comp_cap, vm_init, (void *)id);
 		assert(vm_main_thd[id]);
 		vm_main_thdid[id] = (thdid_t)cos_introspect(&vkern_info, vm_main_thd[id], THD_GET_TID);
+		test = vm_main_thdid[id];
+		if (test == 12) {
+				printc("THIS IT!! 740: %d , %d\n", id, test);
+		}
+
 		printc("\tMain thread= cap:%x tid:%x\n", (unsigned int)vm_main_thd[id], vm_main_thdid[id]);
 		cos_cap_cpy_at(&vmbooter_info[id], BOOT_CAPTBL_SELF_INITTHD_BASE, &vkern_info, vm_main_thd[id]);
 		vmstatus[id] = VM_RUNNING;
@@ -1001,6 +781,8 @@ cos_init(void)
 			assert(dom0_sla_tcap);
 			dom0_sla_thd = cos_thd_alloc(&vkern_info, vmbooter_info[id].comp_cap, dom0_sla_fn, (void *)id);
 			assert(dom0_sla_thd);
+			test = (thdid_t)cos_introspect(&vkern_info, dom0_sla_thd, THD_GET_TID);
+
 			dom0_sla_rcv = cos_arcv_alloc(&vkern_info, dom0_sla_thd, dom0_sla_tcap, vkern_info.comp_cap, vminitrcv[id]);
 			assert(dom0_sla_rcv);
 
@@ -1015,6 +797,11 @@ cos_init(void)
 
 			dummy_thd = cos_thd_alloc(&vkern_info, vkern_info.comp_cap, dummy_fn, (void *)id);
 			assert(dummy_thd);
+			test = (thdid_t)cos_introspect(&vkern_info, dummy_thd, THD_GET_TID);
+			if (test == 8) {
+				printc("THIS IT!! 790");
+				assert(0);
+			}
 			dummy_rcv = cos_arcv_alloc(&vkern_info, dummy_thd, dom0_sla_tcap, vkern_info.comp_cap, dom0_sla_rcv);
 			assert(dummy_rcv);
 		}
@@ -1028,6 +815,11 @@ cos_init(void)
 		vk_time_thd[id] = cos_thd_alloc(&vkern_info, vkern_info.comp_cap, vk_time_fn, (void *)id);
 		assert(vk_time_thd[id]);
 		vk_time_thdid[id] = (thdid_t)cos_introspect(&vkern_info, vk_time_thd[id], 9);
+		test = vk_time_thdid[id];
+		if (test == 8) {
+			printc("THIS IT!! 826");
+			assert(0);
+		}
 		vk_time_blocked[id] = 0;
 		vk_time_rcv[id] = cos_arcv_alloc(&vkern_info, vk_time_thd[id], vk_time_tcap[id], vkern_info.comp_cap, sched_rcv);
 		assert(vk_time_rcv[id]);
@@ -1064,87 +856,60 @@ cos_init(void)
 #endif
 
 		if (id > 0) {
-#if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
 			/* DOM0 to have capability to delegate time to VM */
 			cos_cap_cpy_at(&vmbooter_info[0], VM0_CAPTBL_SELF_INITASND_SET_BASE + (id-1)*CAP64B_IDSZ, &vkern_info, vksndvm[id]);
-#endif
 			printc("\tSetting up Cross VM (between vm0 and vm%d) communication channels\n", id);
-			/* VM0 to VMid */
-			vm0_io_thd[id-1] = cos_thd_alloc(&vkern_info, vmbooter_info[0].comp_cap, vm0_io_fn, (void *)id);
-			assert(vm0_io_thd[id-1]);
-			vms_io_thd[id-1] = cos_thd_alloc(&vkern_info, vmbooter_info[id].comp_cap, vmx_io_fn, (void *)id);
-			assert(vms_io_thd[id-1]);
-			
-#if defined(__INTELLIGENT_TCAPS__)
-			vm0_io_tcap[id-1] = cos_tcap_alloc(&vkern_info);
-			assert(vm0_io_tcap[id-1]);
-			vm0_io_rcv[id-1] = cos_arcv_alloc(&vkern_info, vm0_io_thd[id-1], vm0_io_tcap[id-1], vkern_info.comp_cap, vminitrcv[0]);
-			assert(vm0_io_rcv[id-1]);
-
-			if ((ret = cos_tcap_transfer(vm0_io_rcv[id-1], vminittcap[0], TCAP_RES_INF, TCAP_PRIO_MAX))) {
-				printc("\tTcap transfer failed %d\n", ret);
-				assert(0);
-			}
-			/* VMp to VM0 */		
-			vms_io_tcap[id-1] = cos_tcap_alloc(&vkern_info);
-			assert(vms_io_tcap[id-1]);
-			vms_io_rcv[id-1] = cos_arcv_alloc(&vkern_info, vms_io_thd[id-1], vms_io_tcap[id-1], vkern_info.comp_cap, vminitrcv[id]);
-			assert(vms_io_rcv[id-1]);
-
-			if ((ret = cos_tcap_transfer(vms_io_rcv[id-1], vminittcap[id], TCAP_RES_INF, TCAP_PRIO_MAX))) {
-				printc("\tTcap transfer failed %d\n", ret);
-				assert(0);
-			}
-
-			cos_cap_cpy_at(&vmbooter_info[0], VM0_CAPTBL_SELF_IOTCAP_SET_BASE + (id-1)*CAP16B_IDSZ, &vkern_info, vm0_io_tcap[id-1]);
-			cos_cap_cpy_at(&vmbooter_info[id], VM_CAPTBL_SELF_IOTCAP_BASE, &vkern_info, vms_io_tcap[id-1]);
-#elif defined(__SIMPLE_DISTRIBUTED_TCAPS__)
-			
-			if (id == DL_VM) {	
+			if (id == DL_VM) {
 				/* The HPET tcap in dom0 (used for vmio and hpet irq */	
+				vm0_io_thd[id-1] = cos_thd_alloc(&vkern_info, vmbooter_info[0].comp_cap, vm0_io_fn, (void *)id);
+				assert(vm0_io_thd[id-1]);
 				vm0_io_tcap[id-1] = cos_tcap_alloc(&vkern_info);
 				assert(vm0_io_tcap[id-1]);
-			} else {
-				vm0_io_tcap[id-1] = vminittcap[0];
-				assert(vm0_io_tcap[id-1]);
-			}
-			vm0_io_rcv[id-1] = cos_arcv_alloc(&vkern_info, vm0_io_thd[id-1], vm0_io_tcap[id-1], vkern_info.comp_cap, vminitrcv[0]);
-			assert(vm0_io_rcv[id-1]);
-
-			vms_io_rcv[id-1] = cos_arcv_alloc(&vkern_info, vms_io_thd[id-1], vminittcap[id], vkern_info.comp_cap, vminitrcv[id]);
-			assert(vms_io_rcv[id-1]);
-			cos_cap_cpy_at(&vmbooter_info[0], VM0_CAPTBL_SELF_IOTCAP_SET_BASE + (id-1)*CAP16B_IDSZ, &vkern_info, vm0_io_tcap[id-1]);
-#elif defined(__SIMPLE_XEN_LIKE_TCAPS__)
-			vm0_io_rcv[id-1] = cos_arcv_alloc(&vkern_info, vm0_io_thd[id-1], vminittcap[0], vkern_info.comp_cap, vminitrcv[0]);
-			assert(vm0_io_rcv[id-1]);
-			vms_io_rcv[id-1] = cos_arcv_alloc(&vkern_info, vms_io_thd[id-1], vminittcap[id], vkern_info.comp_cap, vminitrcv[id]);
-			assert(vms_io_rcv[id-1]);
-#endif
-
-			
-			/* Changing to init thd of dl_vm
-			 * DOM0 -> DL_VM asnd
-			 */
-			if (id == DL_VM) {
+				vm0_io_rcv[id-1] = cos_arcv_alloc(&vkern_info, vm0_io_thd[id-1], vm0_io_tcap[id-1], vkern_info.comp_cap, vminitrcv[0]);
+				assert(vm0_io_rcv[id-1]);
+				/* Changing to init thd of dl_vm
+				 * DOM0 -> DL_VM asnd
+				 */
 				vm0_io_asnd[id-1] = cos_asnd_alloc(&vkern_info, vminitrcv[id], vkern_info.captbl_cap);
 				assert(vm0_io_asnd[id-1]);
-			} 
-			else {
+				vms_io_asnd[id-1] = cos_asnd_alloc(&vkern_info, vm0_io_rcv[id-1], vkern_info.captbl_cap);
+				assert(vms_io_asnd[id-1]);
+				cos_cap_cpy_at(&vmbooter_info[0], VM0_CAPTBL_SELF_IOTHD_SET_BASE + (id-1)*CAP16B_IDSZ, &vkern_info, vm0_io_thd[id-1]);
+				cos_cap_cpy_at(&vmbooter_info[0], VM0_CAPTBL_SELF_IOTCAP_SET_BASE + (id-1)*CAP16B_IDSZ, &vkern_info, vm0_io_tcap[id-1]);
+				cos_cap_cpy_at(&vmbooter_info[0], VM0_CAPTBL_SELF_IORCV_SET_BASE + (id-1)*CAP64B_IDSZ, &vkern_info, vm0_io_rcv[id-1]);
+				cos_cap_cpy_at(&vmbooter_info[0], VM0_CAPTBL_SELF_IOASND_SET_BASE + (id-1)*CAP64B_IDSZ, &vkern_info, vm0_io_asnd[id-1]);
+				cos_cap_cpy_at(&vmbooter_info[id], VM_CAPTBL_SELF_IOASND_BASE, &vkern_info, vms_io_asnd[id-1]);
+			} else {
+				/* VM0 to VMid */
+				vm0_io_thd[id-1] = cos_thd_alloc(&vkern_info, vmbooter_info[0].comp_cap, vm0_io_fn, (void *)id);
+				assert(vm0_io_thd[id-1]);
+				vms_io_thd[id-1] = cos_thd_alloc(&vkern_info, vmbooter_info[id].comp_cap, vmx_io_fn, (void *)id);
+				assert(vms_io_thd[id-1]);
+
+				vm0_io_tcap[id-1] = vminittcap[0];
+				assert(vm0_io_tcap[id-1]);
+				vm0_io_rcv[id-1] = cos_arcv_alloc(&vkern_info, vm0_io_thd[id-1], vm0_io_tcap[id-1], vkern_info.comp_cap, vminitrcv[0]);
+				assert(vm0_io_rcv[id-1]);
+
+				vms_io_rcv[id-1] = cos_arcv_alloc(&vkern_info, vms_io_thd[id-1], vminittcap[id], vkern_info.comp_cap, vminitrcv[id]);
+				assert(vms_io_rcv[id-1]);
+				cos_cap_cpy_at(&vmbooter_info[0], VM0_CAPTBL_SELF_IOTCAP_SET_BASE + (id-1)*CAP16B_IDSZ, &vkern_info, vm0_io_tcap[id-1]);
+
 				vm0_io_asnd[id-1] = cos_asnd_alloc(&vkern_info, vms_io_rcv[id-1], vkern_info.captbl_cap);
 				assert(vm0_io_asnd[id-1]);
+
+				vms_io_asnd[id-1] = cos_asnd_alloc(&vkern_info, vm0_io_rcv[id-1], vkern_info.captbl_cap);
+				assert(vms_io_asnd[id-1]);
+
+				cos_cap_cpy_at(&vmbooter_info[0], VM0_CAPTBL_SELF_IOTHD_SET_BASE + (id-1)*CAP16B_IDSZ, &vkern_info, vm0_io_thd[id-1]);
+				cos_cap_cpy_at(&vmbooter_info[0], VM0_CAPTBL_SELF_IORCV_SET_BASE + (id-1)*CAP64B_IDSZ, &vkern_info, vm0_io_rcv[id-1]);
+				cos_cap_cpy_at(&vmbooter_info[0], VM0_CAPTBL_SELF_IOASND_SET_BASE + (id-1)*CAP64B_IDSZ, &vkern_info, vm0_io_asnd[id-1]);
+
+				printc("VM_CAPTBL_SELF_IOASND_BASE%d\n", VM_CAPTBL_SELF_IOASND_BASE);
+				cos_cap_cpy_at(&vmbooter_info[id], VM_CAPTBL_SELF_IOTHD_BASE, &vkern_info, vms_io_thd[id-1]);
+				cos_cap_cpy_at(&vmbooter_info[id], VM_CAPTBL_SELF_IORCV_BASE, &vkern_info, vms_io_rcv[id-1]);
+				cos_cap_cpy_at(&vmbooter_info[id], VM_CAPTBL_SELF_IOASND_BASE, &vkern_info, vms_io_asnd[id-1]);
 			}
-
-			vms_io_asnd[id-1] = cos_asnd_alloc(&vkern_info, vm0_io_rcv[id-1], vkern_info.captbl_cap);
-			assert(vms_io_asnd[id-1]);
-
-			cos_cap_cpy_at(&vmbooter_info[0], VM0_CAPTBL_SELF_IOTHD_SET_BASE + (id-1)*CAP16B_IDSZ, &vkern_info, vm0_io_thd[id-1]);
-			cos_cap_cpy_at(&vmbooter_info[0], VM0_CAPTBL_SELF_IORCV_SET_BASE + (id-1)*CAP64B_IDSZ, &vkern_info, vm0_io_rcv[id-1]);
-			cos_cap_cpy_at(&vmbooter_info[0], VM0_CAPTBL_SELF_IOASND_SET_BASE + (id-1)*CAP64B_IDSZ, &vkern_info, vm0_io_asnd[id-1]);
-
-			printc("VM_CAPTBL_SELF_IOASND_BASE%d\n", VM_CAPTBL_SELF_IOASND_BASE);
-			cos_cap_cpy_at(&vmbooter_info[id], VM_CAPTBL_SELF_IOTHD_BASE, &vkern_info, vms_io_thd[id-1]);
-			cos_cap_cpy_at(&vmbooter_info[id], VM_CAPTBL_SELF_IORCV_BASE, &vkern_info, vms_io_rcv[id-1]);
-			cos_cap_cpy_at(&vmbooter_info[id], VM_CAPTBL_SELF_IOASND_BASE, &vkern_info, vms_io_asnd[id-1]);
 		}
 
 		/*
