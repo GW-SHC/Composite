@@ -106,7 +106,7 @@ check_delegate(void) {
 }
 
 void 
-dl_booter_init(void)
+dl_booter_init_new(void)
 {
 	cycles_t first_period = 0, first_start, first_dl;
 	tcap_res_t budget = 0;

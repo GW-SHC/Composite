@@ -845,6 +845,15 @@ cos_hw_detach(hwcap_t hwc, hwid_t hwid)
 { return call_cap_op(hwc, CAPTBL_OP_HW_DETACH, hwid, 0, 0, 0); }
 
 int
+cos_hw_cycles_per_msec(hwcap_t hwc)
+{
+	static int cycs = 0;
+
+	while (!cycs) cycs = call_cap_op(hwc, CAPTBL_OP_HW_CYC_MSEC, 0, 0, 0, 0);
+	return cycs;
+}
+
+int
 cos_hw_cycles_per_usec(hwcap_t hwc)
 {
 	static int cycs = 0;

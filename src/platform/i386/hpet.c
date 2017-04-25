@@ -20,6 +20,8 @@
 
 #define HPET_OFFSET(n) ((unsigned char*)hpet + n)
 
+#define __USECS_CEIL__(n,m) (n+(m-(n%m)))
+
 #define HPET_CAPABILITIES  (0x0)
 #define HPET_CONFIGURATION (0x10)
 #define HPET_INTERRUPT     (0x20)
@@ -174,7 +176,17 @@ timer_calibration(void)
 
 int
 chal_cyc_usec(void)
-{ return cycles_per_tick / TIMER_DEFAULT_US_INTERARRIVAL; }
+{
+	if (cycles_per_tick) return __USECS_CEIL__(cycles_per_tick / TIMER_DEFAULT_US_INTERARRIVAL, 100);
+        else                 return 0;
+}
+
+int
+chal_cyc_msec(void)
+{ 
+	assert(TIMER_DEFAULT_US_INTERARRIVAL == 1000);
+	return cycles_per_tick; 
+}
 
 int
 periodic_handler(struct pt_regs *regs)

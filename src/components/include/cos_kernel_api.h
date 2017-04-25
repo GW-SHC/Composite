@@ -101,6 +101,7 @@ int cos_hw_periodic_attach(hwcap_t hwc, arcvcap_t rcvcap, unsigned int period);
 int cos_hw_detach(hwcap_t hwc, hwid_t hwid);
 void *cos_hw_map(struct cos_compinfo *ci, hwcap_t hwc, paddr_t pa, unsigned int len);
 int cos_hw_cycles_per_usec(hwcap_t hwc);
+int cos_hw_cycles_per_msec(hwcap_t hwc);
 int cos_hw_cycles_thresh(hwcap_t hwc);
 
 #endif /* COS_KERNEL_API_H */

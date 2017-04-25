@@ -4,6 +4,7 @@
 #include <vkern_api.h>
 #include "cos_sync.h"
 #include "vk_api.h"
+#include "spin.h"
 
 #define PRINT_FN prints
 #define debug_print(str) (PRINT_FN(str __FILE__ ":" STR(__LINE__) ".\n"))
@@ -16,7 +17,8 @@ struct cos_compinfo vkern_info;
 struct cos_compinfo vkern_shminfo;
 unsigned int ready_vms = COS_VIRT_MACH_COUNT;
 
-unsigned int cycs_per_usec = 0;
+unsigned int cycs_per_usec = 1;
+unsigned int cycs_per_msec = 1;
 
 /*worker thds for dlvm*/
 //extern void dl_work_one(void *);
@@ -638,10 +640,17 @@ cos_init(void)
 
 	while (!(cycs = cos_hw_cycles_per_usec(BOOT_CAPTBL_SELF_INITHW_BASE))) ;
 	printc("\t%d cycles per microsecond\n", cycs);
-
 	cycs_per_usec = (unsigned int)cycs;
 
+	while (!(cycs = cos_hw_cycles_per_msec(BOOT_CAPTBL_SELF_INITHW_BASE))) ;
+	printc("\t%d cycles per microsecond\n", cycs);
+	cycs_per_msec = (unsigned int)cycs;
+	
+	printc("cycles_per_msec: %lu, TIME QUANTUM: %lu, RES_INF: %lu\n", (unsigned long)cycs_per_msec, (unsigned long)(VM_TIMESLICE*cycs_per_msec), TCAP_RES_INF);
 	printc("cycles_per_usec: %lu, TIME QUANTUM: %lu, RES_INF: %lu\n", (unsigned long)cycs_per_usec, (unsigned long)(VM_TIMESLICE*cycs_per_usec), TCAP_RES_INF);
+
+	spin_calib();
+	//test_spinlib();
 
 	vm_list_init();
 	setup_credits();

@@ -49,6 +49,9 @@ enum vm_prio {
 
 #define PERIOD 10000
 
+#define HPET_PERIOD_MS 10
+#define HPET_PERIOD_US (HPET_PERIOD_MS*1000)
+
 #define DLVM_PRIO PRIO_HIGH
 #define NWVM_PRIO PRIO_LOW
 #define DOM0_PRIO PRIO_MID
@@ -142,6 +145,7 @@ enum {
 };
 
 extern unsigned int cycs_per_usec;
+extern unsigned int cycs_per_msec;
 
 #if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
 extern cycles_t dom0_sla_act_cyc;
