@@ -147,23 +147,15 @@ cos_irqthd_handler(void *line)
 	static int count = 0;
 	cycles_t budget;
 	char buff [4];
+	printc("COS_IRQ_THD_HANDLER\n");
 	while(1) {
 		int pending = cos_rcv(arcvcap);
 //		printc("HPET: %d\n", (int)line);
 
 		if ((int)line == 0) {
-		//	rdtscll(now);
-		//	if (prev && !cycles_same(now-prev, PERIOD*cycs_per_usec, (1<<12))) {
-		//		printc("OVER by %llu! ", (now - prev) / (cycs_per_usec));
-		//	}
-		//	prev = now;
 			count++;
-			int i = 0;
-			for (i = 0; i < 100; i++) {
-				printc("IRQTHD\n");
-			}		
-			if (count % 1000 == 0)printc("cnt:%d\n", count);
-			assert(0);	
+			
+			printc("cnt:%d\n", count);
 			sndcap = VM0_CAPTBL_SELF_IOASND_SET_BASE + (DL_VM - 1) * CAP64B_IDSZ;
 		
 		//	tcap_res_t budget = (tcap_res_t)cos_introspect(&booter_info, VM0_CAPTBL_SELF_IOTCAP_SET_BASE + CAP16B_IDSZ, TCAP_GET_BUDGET);
@@ -570,11 +562,12 @@ cos_sched_yield(void)
 
 void
 cos_vm_yield(void)
-#if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
-{ if(cos_tcap_delegate(VM_CAPTBL_SELF_VKASND_BASE, BOOT_CAPTBL_SELF_INITTCAP_BASE, 0, PRIO_LOW, TCAP_DELEG_YIELD)) assert(0); }
-#elif defined(__SIMPLE_XEN_LIKE_TCAPS__)
-{ cos_asnd(VM_CAPTBL_SELF_VKASND_BASE, 1); }
-#endif
+{ cos_thd_switch(BOOT_CAPTBL_SELF_INITTHD_BASE); }
+//#if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
+//{ if(cos_tcap_delegate(VM_CAPTBL_SELF_VKASND_BASE, BOOT_CAPTBL_SELF_INITTCAP_BASE, 0, PRIO_LOW, TCAP_DELEG_YIELD)) assert(0); }
+//#elif defined(__SIMPLE_XEN_LIKE_TCAPS__)
+//{ cos_asnd(VM_CAPTBL_SELF_VKASND_BASE, 1); }
+//#endif
 
 void
 cos_dom02io_transfer(unsigned int irqline, tcap_t tc, arcvcap_t rc, tcap_prio_t prio)

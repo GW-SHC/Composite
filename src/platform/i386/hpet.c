@@ -191,17 +191,31 @@ chal_cyc_msec(void)
 int
 periodic_handler(struct pt_regs *regs)
 {
+	static u32_t count = 0;
 	int preempt = 1;
 	static int iter = 0;
 	if (unlikely(timer_calibration_init)) timer_calibration();
 
 	ack_irq(HW_PERIODIC);
-	if (periodicity_curr && !first_hpet_period) {
-		rdtscll(first_hpet_period);
+//	if (periodicity_curr && !first_hpet_period) {
+//		rdtscll(first_hpet_period);
+//	}
+
+	if (periodicity_curr) {
+		count ++;
+		
+		if (unlikely(count < 1000)) goto done;
+		
+		if (!first_hpet_period) {
+			rdtscll(first_hpet_period);
+		}
 	}
+	
 	iter++;
-	if (iter % 500 == 0) printk("hpet: %d", iter);
+	if (iter % 1000 == 0) printk("hpet: %d", iter);
+
 	preempt = cap_hw_asnd(&hw_asnd_caps[HW_PERIODIC], regs);
+done:	
 	HPET_INT_ENABLE(TIMER_PERIODIC);
 
 	return preempt;

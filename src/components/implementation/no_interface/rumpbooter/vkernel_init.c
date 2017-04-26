@@ -279,20 +279,15 @@ boot_dlvm_sched_fn(int index, tcap_res_t budget)
 	if (first == 1) return 1;
 	else first = 1;
 
-	tcap_res_t timeslice = VM_TIMESLICE * cycs_per_usec;
-
-	if (budget >= timeslice) {
-		printc("DLVM NOT TRANSFER ON BOOT\n");
-	} else {
-		printc("DLVM BOOT TRANSFER\n");
-		if ((cos_tcap_transfer(vminitrcv[index], sched_tcap, timeslice-budget, vmprio[index]))) {
-			printc("\tTcap transfer failed \n");
-			assert(0);
-		}
-		/* ideal case */
-		//printc("cos_switch a lil earlier\n");
-		cos_switch(vm_main_thd[index], vminittcap[index], vmprio[index], 0, sched_rcv, cos_sched_sync());
+	tcap_res_t timeslice = 10 * VM_TIMESLICE * cycs_per_usec;
+	printc("DLVM BOOT TRANSFER\n");
+	if ((cos_tcap_transfer(vminitrcv[index], sched_tcap, timeslice, vmprio[index]))) {
+		printc("\tTcap transfer failed \n");
+		assert(0);
 	}
+	
+	printc("DLVM BOOT SWITCH\n");
+	cos_switch(vm_main_thd[index], vminittcap[index], vmprio[index], 0, sched_rcv, cos_sched_sync());
 
 	return 0;
 }
@@ -364,14 +359,15 @@ void
 bootup_hack(void)
 {
 	int i;
+	
+	boot_dlvm_sched_fn(2, (tcap_res_t)cos_introspect(&vkern_info, vminittcap[2], TCAP_GET_BUDGET));
+	while(1);
 	for (i = 0 ; i <  BOOTUP_ITERS+1; i++) {
 		bootup_sched_fn(0);
 		bootup_sched_fn(1);
 	}
 
-	boot_dlvm_sched_fn(2, (tcap_res_t)cos_introspect(&vkern_info, vminittcap[2], TCAP_GET_BUDGET));
 	printc("BOOTUP DONE\n");
-	//while(1);
 }
 
 #define YIELD_CYCS 10000

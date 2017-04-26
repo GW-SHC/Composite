@@ -111,6 +111,7 @@ dl_booter_init(void)
 	int ret = 0;
 
 	printc("NEW DL_BOOTER_INIT: %d\n", vmid);
+	
 	assert(cycs_per_usec && cycs_per_msec);
 
 	w1 = cos_thd_alloc(&booter_info, booter_info.comp_cap, dl_work_one, NULL);
@@ -118,8 +119,8 @@ dl_booter_init(void)
 	
 	w2 = cos_thd_alloc(&booter_info, booter_info.comp_cap, dl_work_two, NULL);
 	assert(w2);
-
-	if(cos_tcap_delegate(VM_CAPTBL_SELF_IOASND_BASE, BOOT_CAPTBL_SELF_INITTCAP_BASE, cycs_per_msec, DLVM_PRIO, 0)) assert(0);
+	
+	if(cos_tcap_delegate(VM_CAPTBL_SELF_IOASND_BASE, BOOT_CAPTBL_SELF_INITTCAP_BASE, 5 * cycs_per_msec, DLVM_PRIO, 0)) assert(0);
 	
 	while(1) {
 		cycles_t now;
