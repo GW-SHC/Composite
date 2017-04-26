@@ -10,7 +10,8 @@
 
 #define DL_VM 2
 
-#define VM_TIMESLICE 1*1000//*cycs_per_usec = 10ms
+#define VM_MS_TIMESLICE 1*1000//*cycs_per_usec = 1ms
+#define VM_TIMESLICE 1*1000//*cycs_per_usec = 1ms
 #define VM_MIN_TIMESLICE (10) //1us
 #define SCHED_MIN_TIMESLICE (10)
 #define SCHED_QUANTUM (VM_TIMESLICE * 100)

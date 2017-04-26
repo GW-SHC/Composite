@@ -158,17 +158,17 @@ cos_irqthd_handler(void *line)
 		//	}
 		//	prev = now;
 			count++;
-			if (count % 1000 == 0) {
-				printc("cnt:%d\n", count);
-			}	
+		
+			if (count % 1000 == 0)printc("cnt:%d\n", count);
+			
 			sndcap = VM0_CAPTBL_SELF_IOASND_SET_BASE + (DL_VM - 1) * CAP64B_IDSZ;
 		
-			tcap_res_t budget = (tcap_res_t)cos_introspect(&booter_info, VM0_CAPTBL_SELF_IOTCAP_SET_BASE + CAP16B_IDSZ, TCAP_GET_BUDGET);
-			if (budget >= 10000*cycs_per_usec) {
-				//printc("transfering back to dlvm\n");
-				//cos_tcap_delegate(sndcap, VM0_CAPTBL_SELF_IOTCAP_SET_BASE + CAP16B_IDSZ, 8000*cycs_per_usec, DLVM_PRIO, 0);
-				//continue;
-			}
+		//	tcap_res_t budget = (tcap_res_t)cos_introspect(&booter_info, VM0_CAPTBL_SELF_IOTCAP_SET_BASE + CAP16B_IDSZ, TCAP_GET_BUDGET);
+		//	if (budget >= 10000*cycs_per_usec) {
+		//		//printc("transfering back to dlvm\n");
+		//		//cos_tcap_delegate(sndcap, VM0_CAPTBL_SELF_IOTCAP_SET_BASE + CAP16B_IDSZ, 8000*cycs_per_usec, DLVM_PRIO, 0);
+		//		//continue;
+		//	}
 			
 			if(cos_asnd(sndcap, 0)) assert(0);
 		}else {

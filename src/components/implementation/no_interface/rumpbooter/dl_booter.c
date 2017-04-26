@@ -88,21 +88,18 @@ void
 check_delegate(void) {
 		cycles_t now;
 		rdtscll(now);
-		tcap_res_t min = 1000*cycs_per_usec;
+		tcap_res_t min = cycs_per_msec;
 
-		if (periods % 1 == 0) {
 
-			tcap_res_t budget = (tcap_res_t)cos_introspect(&booter_info, BOOT_CAPTBL_SELF_INITTCAP_BASE, TCAP_GET_BUDGET);
-			tcap_res_t res;
-			
-			if (budget >= min) { res = min; }
-			else {
-				return; /* 0 = 100% budget */
-			}
-			
-
-			if(cos_tcap_delegate(VM_CAPTBL_SELF_IOASND_BASE, BOOT_CAPTBL_SELF_INITTCAP_BASE, res, DLVM_PRIO, 0)) assert(0);
+		tcap_res_t budget = (tcap_res_t)cos_introspect(&booter_info, BOOT_CAPTBL_SELF_INITTCAP_BASE, TCAP_GET_BUDGET);
+		tcap_res_t res;
+		
+		if (budget >= min) { res = min; }
+		else {
+			return; /* 0 = 100% budget */
 		}
+
+		if(cos_tcap_delegate(VM_CAPTBL_SELF_IOASND_BASE, BOOT_CAPTBL_SELF_INITTCAP_BASE, res, DLVM_PRIO, 0)) assert(0);
 }
 
 void 
@@ -113,7 +110,7 @@ dl_booter_init(void)
 	cycles_t activation = 0;
 	int ret = 0;
 
-	printc("DL_BOOTER_INIT: %d\n", vmid);
+	printc("NEW DL_BOOTER_INIT: %d\n", vmid);
 	assert(cycs_per_usec && cycs_per_msec);
 
 	w1 = cos_thd_alloc(&booter_info, booter_info.comp_cap, dl_work_one, NULL);
@@ -121,21 +118,13 @@ dl_booter_init(void)
 	
 	w2 = cos_thd_alloc(&booter_info, booter_info.comp_cap, dl_work_two, NULL);
 	assert(w2);
+
+	if(cos_tcap_delegate(VM_CAPTBL_SELF_IOASND_BASE, BOOT_CAPTBL_SELF_INITTCAP_BASE, cycs_per_msec, DLVM_PRIO, 0)) assert(0);
 	
 	while(1) {
 		cycles_t now;
 
 		ret = cos_rcv(BOOT_CAPTBL_SELF_INITRCV_BASE);
-//		if (!TCAP_RES_IS_INF(budget))
-//			budget = (tcap_res_t)cos_introspect(&booter_info, BOOT_CAPTBL_SELF_INITTCAP_BASE, TCAP_GET_BUDGET); 
-//		rdtscll(now);
-//		if (activation == 0) activation = now;
-//		else {
-//			if ((periods < 10) || (periods > 4500))
-//				printc("%d=now:%llu,last dl:%llu end:%llu\n", periods, now, deadline, prev_exec);
-//			activation = now;
-//			if (periods == 4510) while (1) ;
-//		}
 
 		test_deadline();	
 		periods++;
