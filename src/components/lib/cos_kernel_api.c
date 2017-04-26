@@ -679,6 +679,29 @@ cos_asnd(asndcap_t snd, int yield)
 { return call_cap_op(snd, 0, yield, 0, 0, 0); }
 
 int
+cos_sched_rcv_all(arcvcap_t rcv, int *rcvd, thdid_t *thdid, int *blocked, cycles_t *cycles)
+{
+	unsigned long thd_state = 0;
+	unsigned long cyc       = 0;
+	int           ret;
+
+	ret      = call_cap_retvals_asm(rcv, 1, 0, 0, 0, 0, &thd_state, &cyc);
+
+	*blocked = (int)(thd_state >> (sizeof(thd_state)*8-1));
+	*thdid   = (thdid_t)(thd_state & ((1 << (sizeof(thdid_t)*8))-1));
+	*cycles  = cyc;
+
+	if (ret >= 0) {
+		*rcvd = (ret >> 1);
+		ret &= 1;
+	}
+
+	return ret;
+}
+
+
+
+int
 cos_sched_rcv(arcvcap_t rcv, thdid_t *thdid, int *blocked, cycles_t *cycles)
 {
 	unsigned long thd_state = 0;

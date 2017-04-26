@@ -153,7 +153,7 @@ tcap_consume(struct tcap *t, tcap_res_t cycles)
 		t->budget.cycles = 0;
 		tcap_active_rem(t); /* no longer active */
 		if (t->intbmp && t->masked == 0) {
-			//if (t->intbmp == 1) printk("BUMPING HPET ISR\n");
+			if (t->intbmp == 1) printk("BUMPING HPET ISR\n");
 			chal_mask_irqbmp(t->intbmp);
 			t->masked = 1;
 		}

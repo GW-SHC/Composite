@@ -158,9 +158,12 @@ cos_irqthd_handler(void *line)
 		//	}
 		//	prev = now;
 			count++;
-		
+			int i = 0;
+			for (i = 0; i < 100; i++) {
+				printc("IRQTHD\n");
+			}		
 			if (count % 1000 == 0)printc("cnt:%d\n", count);
-			
+			assert(0);	
 			sndcap = VM0_CAPTBL_SELF_IOASND_SET_BASE + (DL_VM - 1) * CAP64B_IDSZ;
 		
 		//	tcap_res_t budget = (tcap_res_t)cos_introspect(&booter_info, VM0_CAPTBL_SELF_IOTCAP_SET_BASE + CAP16B_IDSZ, TCAP_GET_BUDGET);

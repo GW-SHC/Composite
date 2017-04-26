@@ -194,7 +194,7 @@ setup_credits(void)
 				case 2:
 					//vmcredits[i] = (VM2_CREDITS * VM_TIMESLICE * cycs_per_usec);
 					//vmcredits[i] = (VM2_CREDITS * VM_TIMESLICE * cycs_per_usec);
-					//total_credits += (VM2_CREDITS * VM_TIMESLICE * cycs_per_usec);
+					total_credits += (VM2_CREDITS * VM_TIMESLICE * cycs_per_usec);
 					break;
 				default: assert(0);
 					vmcredits[i] = VM_TIMESLICE;
@@ -250,11 +250,11 @@ fillup_budgets(void)
  * Credits at bootup shouldn't matter..!!
  */
 int
-bootup_sched_fn(int index, tcap_res_t budget)
+bootup_sched_fn(int index)
 {
-	budget = (tcap_res_t)cos_introspect(&vkern_info, vminittcap[0], TCAP_GET_BUDGET);
+	tcap_res_t budget = (tcap_res_t)cos_introspect(&vkern_info, vminittcap[index], TCAP_GET_BUDGET);
 	if (vm_bootup[index] < BOOTUP_ITERS) {
-		tcap_res_t timeslice = VM_TIMESLICE * cycs_per_usec;
+		tcap_res_t timeslice = 5 * VM_TIMESLICE * cycs_per_usec;
 
 		vm_bootup[index] ++;
 		if (budget >= timeslice) {
@@ -282,14 +282,7 @@ boot_dlvm_sched_fn(int index, tcap_res_t budget)
 	tcap_res_t timeslice = VM_TIMESLICE * cycs_per_usec;
 
 	if (budget >= timeslice) {
-		//if (cos_asnd(vksndvm[index], 1)) assert(0);
-	//	if ((cos_tcap_transfer(vminitrcv[index], sched_tcap, timeslice-budget, vmprio[index]))) {
-	//		printc("\tTcap transfer failed \n");
-	//		assert(0);
-	//	}
-		// ideal case
-		printc("DLVM BOOT SCHED\n");
-		//cos_switch(vm_main_thd[index], vminittcap[index], vmprio[index], 0, sched_rcv, cos_sched_sync());
+		printc("DLVM NOT TRANSFER ON BOOT\n");
 	} else {
 		printc("DLVM BOOT TRANSFER\n");
 		if ((cos_tcap_transfer(vminitrcv[index], sched_tcap, timeslice-budget, vmprio[index]))) {
@@ -370,7 +363,15 @@ sched_vm(void)
 void
 bootup_hack(void)
 {
+	int i;
+	for (i = 0 ; i <  BOOTUP_ITERS+1; i++) {
+		bootup_sched_fn(0);
+		bootup_sched_fn(1);
+	}
+
 	boot_dlvm_sched_fn(2, (tcap_res_t)cos_introspect(&vkern_info, vminittcap[2], TCAP_GET_BUDGET));
+	printc("BOOTUP DONE\n");
+	//while(1);
 }
 
 #define YIELD_CYCS 10000
@@ -417,7 +418,6 @@ sched_fn(void *x)
 		tcap_res_t min_budget = VM_MIN_TIMESLICE * cycs_per_usec;
 		int index = 0;
 
-		if (!bootup_sched_fn(0, budget)) continue;
 		
 		wakeup_vms(1);
 		do {

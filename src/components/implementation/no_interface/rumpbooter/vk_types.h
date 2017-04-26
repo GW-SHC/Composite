@@ -21,7 +21,7 @@
 #undef PRINT_CPU_USAGE 
 #define MIN_CYCS (1<<12)
 
-#define BOOTUP_ITERS 100 
+#define BOOTUP_ITERS 1000 
 
 #undef __SIMPLE_XEN_LIKE_TCAPS__
 #define __SIMPLE_DISTRIBUTED_TCAPS__
