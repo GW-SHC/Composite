@@ -70,6 +70,7 @@ struct cos_rumpcalls
 	int    (*rump_shmem_recv)(void * buff, unsigned int srcvm, unsigned int dstvm);
 	void   (*rump_sched_yield)(void);
 	void   (*rump_vm_yield)(void);
+	void   (*rump_cpu_intr_ack)(void);
 	int    (*rump_dequeue_size)(unsigned int srcvm, unsigned int dstvm);
 };
 
@@ -82,6 +83,7 @@ void cos_memfree(void *cp);
 
 void  rump_bmk_memsize_init(void);
 
+void cos_cpu_intr_ack(void);
 void set_cos_thddata(struct bmk_thread *thread, capid_t thd, thdid_t tid);
 capid_t get_cos_thdcap(struct bmk_thread *thread);
 thdid_t get_cos_thdid(struct bmk_thread *thread);
@@ -98,6 +100,7 @@ void *cos_pa2va(void* addr, unsigned long len);
 void cos_vm_exit(void);
 void cos_sched_yield(void);
 void cos_vm_yield(void);
+void cos_vm_print(char s[], int ret);
 
 int cos_shmem_send(void * buff, unsigned int size, unsigned int srcvm, unsigned int dstvm);
 int cos_shmem_recv(void * buff, unsigned int srcvm, unsigned int curvm);

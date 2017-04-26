@@ -699,8 +699,6 @@ cos_sched_rcv_all(arcvcap_t rcv, int *rcvd, thdid_t *thdid, int *blocked, cycles
 	return ret;
 }
 
-
-
 int
 cos_sched_rcv(arcvcap_t rcv, thdid_t *thdid, int *blocked, cycles_t *cycles)
 {

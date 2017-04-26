@@ -80,10 +80,8 @@ hw_irq_alloc(void){
 					irq_arcvcap[i] = VM_CAPTBL_SELF_IORCV_BASE;
 					/* VMs use only 1 tcap - INITTCAP for all execution */
 					irq_tcap[i] = BOOT_CAPTBL_SELF_INITTCAP_BASE;
-#if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
 					//irq_prio[i] = VIO_PRIO;
 					irq_prio[i] = NWVM_PRIO;
-#endif
 					break;
 				default: 
 					break;
@@ -91,7 +89,6 @@ hw_irq_alloc(void){
 		}
 	}
 
-#if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
 	memset(vio_tcap, 0, sizeof(vio_tcap));
 	memset(vio_rcv, 0, sizeof(vio_rcv));
 	memset(vio_prio, 0, sizeof(vio_prio));
@@ -115,7 +112,6 @@ hw_irq_alloc(void){
 		assert(IO_BOUND_VM >= 1 && IO_BOUND_VM <= COS_VIRT_MACH_COUNT);
 		cos_cur_tcap = (unsigned int)((vio_tcap[IO_BOUND_VM - 1] << 16) >> 16);
 	}
-#endif
 
 }
 

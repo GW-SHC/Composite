@@ -76,6 +76,7 @@ int cos_asnd(asndcap_t snd, int yield);
 int cos_rcv(arcvcap_t rcv);
 /* returns the same value as cos_rcv, but also information about scheduling events */
 int cos_sched_rcv(arcvcap_t rcv, thdid_t *thdid, int *blocked, cycles_t *cycles);
+int cos_sched_rcv_all(arcvcap_t rcv, int *rcvd, thdid_t *thdid, int *blocked, cycles_t *cycles);
 
 int cos_introspect(struct cos_compinfo *ci, capid_t cap, unsigned long op);
 int cos_introspect64(struct cos_compinfo *ci, capid_t cap, unsigned long op, u64_t *value);
