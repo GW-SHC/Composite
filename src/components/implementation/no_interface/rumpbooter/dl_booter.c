@@ -33,28 +33,28 @@ void dl_deadline_test(void) __attribute__((optimize("O0")));
 void
 dl_work_two(void * ignore)
 {
-	int c = 2, n = 0;
+	unsigned long c = 2, n = 0;
 
 	while(1) {
 		assert(run == 2);
 
 		spin_usecs(2000);
 		if (!ps_cas(&run, c, n)) assert(0);
-		while (run == 0) cos_thd_switch(BOOT_CAPTBL_SELF_INITTHD_BASE);
+		cos_thd_switch(BOOT_CAPTBL_SELF_INITTHD_BASE);
 	}
 }
 
 void
 dl_work_one(void * ignore)
 {
-	int c = 1, n = 2;
+	unsigned long c = 1, n = 2;
 
 	while(1) {
 		assert(run == 1);
 
 		spin_usecs(2000);
 		if (!ps_cas(&run, c, n)) assert(0);
-		while (run == 2) cos_thd_switch(w2);
+		cos_thd_switch(BOOT_CAPTBL_SELF_INITTHD_BASE);
 	}
 }
 
@@ -65,12 +65,12 @@ test_deadline(void) {
 
 	rdtscll(then);
 	run = 1;
-	//spin_usecs(8700);
 	while (run > 0) {
 		int ret;
 		thdcap_t t = (run == 1) ? w1 : (run == 2 ? w2 : 0);
 
-		assert(t > 0 && run > 0);
+		assert(run > 0);
+		assert((t == w1 && run == 1) || (t == w2 && run == 2));
 		cos_thd_switch(t);
 	}
 	run = -1;
@@ -127,6 +127,7 @@ dl_booter_init(void)
 		ret = cos_rcv(BOOT_CAPTBL_SELF_INITRCV_BASE);
 
 		test_deadline();	
+	
 		periods++;
 		if (periods % 1000 == 0) printc("periods:%d, dl_missed:%d, dl_made:%d\n", periods, dls_missed, dls_made);
 		
