@@ -77,7 +77,7 @@ unsigned int vio_deficit[COS_VIRT_MACH_COUNT - 1][COS_VIRT_MACH_COUNT - 1];
  */
 unsigned int dom0_vio_deficit[COS_VIRT_MACH_COUNT - 1]; 
 
-#undef GRAPHTP
+#define GRAPHTP
 
 #ifdef GRAPHTP
 

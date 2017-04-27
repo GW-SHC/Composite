@@ -151,9 +151,13 @@ cos_shmem_send(void * buff, unsigned int size, unsigned int srcvm, unsigned int 
 		tcap_res_t budget = (tcap_res_t)cos_introspect(&booter_info, BOOT_CAPTBL_SELF_INITTCAP_BASE, TCAP_GET_BUDGET);
 		tcap_res_t res;
 
-		if (budget >= min) res = budget / 2; /* x cycles */ 
-		else res = 0; /* 0 = 100% budget */
-
+		if (TCAP_RES_IS_INF(budget)) {
+			res = 2 * cycs_per_msec;
+		} else if (budget >= min) {
+			res = budget / 2; /* x cycles */ 
+		} else  {
+			res = 0; /* 0 = 100% budget */
+		}
 		if(cos_tcap_delegate(sndcap, BOOT_CAPTBL_SELF_INITTCAP_BASE, res, NWVM_PRIO, 0)) assert(0);
 	}
 
@@ -225,7 +229,7 @@ cos_irqthd_handler(void *line)
 		//	}
 		//	prev = now;
 			count++;
-	//		if (count % 1000 == 0) printc("cnt:%d\n", count);
+		//	printc("cnt:%d\n", count);
 		
 		//	tcap_res_t budget = (tcap_res_t)cos_introspect(&booter_info, VM0_CAPTBL_SELF_IOTCAP_SET_BASE + CAP16B_IDSZ, TCAP_GET_BUDGET);
 		//	if (budget >= 10000*cycs_per_usec) {
@@ -525,9 +529,21 @@ cos_resume(void)
 			 * Finish any remaining interrupts
 			 */
 			intr_switch();
+			static int hpet_out = 0;
 			if (!hpet_irq_blocked) {
+				tcap_t hpet_tcap;
+				tcap_res_t budget = (tcap_res_t)cos_introspect(&booter_info, irq_tcap[0], TCAP_GET_BUDGET);
+				
+				if (budget == 0) {
+					hpet_out++;
+					printc("hp_out: %d", hpet_out);
+					hpet_tcap = COS_CUR_TCAP;
+				} else {
+				       	hpet_tcap = irq_tcap[0];
+				}
+
 				do {
-					ret = cos_switch(irq_thdcap[0], irq_tcap[0], irq_prio[0], 0, BOOT_CAPTBL_SELF_INITRCV_BASE, cos_sched_sync());
+					ret = cos_switch(irq_thdcap[0], hpet_tcap, irq_prio[0], 0, BOOT_CAPTBL_SELF_INITRCV_BASE, cos_sched_sync());
 					assert(ret == 0 || ret == -EAGAIN);
 				} while (ret == -EAGAIN);
 			}
@@ -682,6 +698,7 @@ cos_dom02io_transfer(unsigned int irqline, tcap_t tc, arcvcap_t rc, tcap_prio_t 
 void
 cos_vio_tcap_set(unsigned int src)
 {
+#if 0
 #if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
 	unsigned int use = (unsigned int) (cos_cur_tcap >> 16);
 	unsigned int final, tmp;
@@ -704,34 +721,35 @@ cos_vio_tcap_set(unsigned int src)
 		} while (unlikely(!ps_cas((unsigned long *)&cos_cur_tcap, tmp, final)));
 	}
 #endif
+#endif
 }
 
 void
 cos_vio_tcap_update(unsigned int dst)
 {
-#if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
-	unsigned int use = (unsigned int) (cos_cur_tcap >> 16);
-	unsigned int final, tmp;
-	static unsigned int counter = 0;
-
-	if (vmid) return;
-
-	assert ((use < (COS_VIRT_MACH_COUNT-1)) && (dst > 0 && dst < COS_VIRT_MACH_COUNT));
-	if (use != (dst - 1)) {
-		printc("%s:%d - use:%d dst:%d\n", __func__, __LINE__, use, dst - 1);
-		__sync_fetch_and_add(&(vio_deficit[use][dst-1]), 1);
-
-		if (vio_deficit[use][dst - 1] < vio_deficit[dst - 1][use]) return;
-
-		use ++;
-		use %= (COS_VIRT_MACH_COUNT - 1);
-		do {
-			tmp = cos_cur_tcap;
-			final = (use << 16) | ((vio_tcap[use] << 16) >> 16);
-
-		} while (unlikely(!ps_cas((unsigned long *)&cos_cur_tcap, tmp, final)));
-	}
-#endif
+//#if defined(__INTELLIGENT_TCAPS__) || defined(__SIMPLE_DISTRIBUTED_TCAPS__)
+//	unsigned int use = (unsigned int) (cos_cur_tcap >> 16);
+//	unsigned int final, tmp;
+//	static unsigned int counter = 0;
+//
+//	if (vmid) return;
+//
+//	assert ((use < (COS_VIRT_MACH_COUNT-1)) && (dst > 0 && dst < COS_VIRT_MACH_COUNT));
+//	if (use != (dst - 1)) {
+//		printc("%s:%d - use:%d dst:%d\n", __func__, __LINE__, use, dst - 1);
+//		__sync_fetch_and_add(&(vio_deficit[use][dst-1]), 1);
+//
+//		if (vio_deficit[use][dst - 1] < vio_deficit[dst - 1][use]) return;
+//
+//		use ++;
+//		use %= (COS_VIRT_MACH_COUNT - 1);
+//		do {
+//			tmp = cos_cur_tcap;
+//			final = (use << 16) | ((vio_tcap[use] << 16) >> 16);
+//
+//		} while (unlikely(!ps_cas((unsigned long *)&cos_cur_tcap, tmp, final)));
+//	}
+//#endif
 }
 
 tcap_t

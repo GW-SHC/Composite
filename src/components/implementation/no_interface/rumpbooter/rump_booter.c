@@ -110,7 +110,7 @@ hw_irq_alloc(void){
 		}
 
 		assert(IO_BOUND_VM >= 1 && IO_BOUND_VM <= COS_VIRT_MACH_COUNT);
-		cos_cur_tcap = (unsigned int)((vio_tcap[IO_BOUND_VM - 1] << 16) >> 16);
+		//cos_cur_tcap = (unsigned int)((vio_tcap[IO_BOUND_VM - 1] << 16) >> 16);
 	}
 
 }

@@ -130,7 +130,7 @@ vm0_io_fn(void *d)
 		}
 		intr_start(irqline);
 		bmk_isr(line);
-		cos_vio_tcap_set((int)d);
+		//cos_vio_tcap_set((int)d);
 		intr_end();
 	}
 }
