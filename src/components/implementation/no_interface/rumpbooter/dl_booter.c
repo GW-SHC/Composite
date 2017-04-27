@@ -95,7 +95,9 @@ check_delegate(void) {
 		tcap_res_t res;
 		
 		if (budget >= min) { res = min; }
-		else {
+		else if (budget != 0) {
+			res = budget/2; 
+		} else {
 			return; /* 0 = 100% budget */
 		}
 

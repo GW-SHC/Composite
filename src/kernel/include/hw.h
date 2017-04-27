@@ -61,7 +61,8 @@ hw_attach_rcvcap(struct cap_hw *hwc, hwid_t hwid, struct cap_arcv *rcvc, capid_t
 	if (hwid < HW_IRQ_EXTERNAL_MIN || hwid > HW_IRQ_EXTERNAL_MAX) return -EINVAL;
 	if (!(hwc->hw_bitmap & (1 << (hwid - HW_IRQ_EXTERNAL_MIN)))) return -EINVAL;
 	if (hw_asnd_caps[hwid].h.type == CAP_ASND) return -EEXIST;
-	tcap_intbmp_set(arcv_tcap(rcvc), (hwid - HW_IRQ_EXTERNAL_MIN));
+	/* don't mask/unmask hpet */
+	if (hwid != HW_PERIODIC) tcap_intbmp_set(arcv_tcap(rcvc), (hwid - HW_IRQ_EXTERNAL_MIN));
 
 	return asnd_construct(&hw_asnd_caps[hwid], rcvc, rcv_cap, 0, 0);
 }

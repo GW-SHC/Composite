@@ -214,7 +214,6 @@ cos_irqthd_handler(void *line)
 	char buff [4];
 
 	if (line == 0) sndcap = VM0_CAPTBL_SELF_IOASND_SET_BASE + (DL_VM - 1) * CAP64B_IDSZ;
-	printc("IRQTHD\n");
 	while(1) {
 		int pending = cos_rcv(arcvcap);
 //		printc("HPET: %d\n", (int)line);
@@ -226,7 +225,7 @@ cos_irqthd_handler(void *line)
 		//	}
 		//	prev = now;
 			count++;
-			if (count % 1000 == 0) printc("cnt:%d\n", count);
+	//		if (count % 1000 == 0) printc("cnt:%d\n", count);
 		
 		//	tcap_res_t budget = (tcap_res_t)cos_introspect(&booter_info, VM0_CAPTBL_SELF_IOTCAP_SET_BASE + CAP16B_IDSZ, TCAP_GET_BUDGET);
 		//	if (budget >= 10000*cycs_per_usec) {

@@ -103,7 +103,6 @@ vm0_io_fn(void *d)
 	int line;
 	unsigned int irqline;
 	arcvcap_t rcvcap;
-	printc("d: %d\n", (int)d);
 	switch((int)d) {
 		case DL_VM:
 			line = 0;
@@ -120,7 +119,6 @@ vm0_io_fn(void *d)
 	}
 
 	rcvcap = VM0_CAPTBL_SELF_IORCV_SET_BASE + (((int)d - 1) * CAP64B_IDSZ);
-	printc("---------------------------rcvcap %d\n", (int)rcvcap);
 	while (1) {
 		int pending = cos_rcv(rcvcap);
 	//	tcap_res_t budget = (tcap_res_t)cos_introspect(&vkern_info, vm0_io_tcap[DL_VM-1], TCAP_GET_BUDGET);
@@ -140,7 +138,6 @@ vm0_io_fn(void *d)
 void
 vmx_io_fn(void *d)
 {
-	printc("vmx\n");
 	assert((int)d != DL_VM);
 	while (1) {
 		int pending = cos_rcv(VM_CAPTBL_SELF_IORCV_BASE);
@@ -169,7 +166,7 @@ setup_credits(void)
 					#ifdef GRAPHTP
 						vmcredits[i] = TCAP_RES_INF;
 					#else
-					//	vmcredits[i] = (VM1_CREDITS * VM_TIMESLICE * cycs_per_usec);
+						vmcredits[i] = (VM1_CREDITS * VM_TIMESLICE * cycs_per_usec);
 					#endif
 					
 					total_credits += (VM1_CREDITS * VM_TIMESLICE * cycs_per_usec);

@@ -77,7 +77,7 @@ unsigned int vio_deficit[COS_VIRT_MACH_COUNT - 1][COS_VIRT_MACH_COUNT - 1];
  */
 unsigned int dom0_vio_deficit[COS_VIRT_MACH_COUNT - 1]; 
 
-#define GRAPHTP
+#undef GRAPHTP
 
 #ifdef GRAPHTP
 
@@ -92,12 +92,12 @@ enum vm_credits {
 
 #else
 
-#define WK1 4000 //usecs
-#define WK2 4000 //usecs
+#define WK1 2000 //usecs
+#define WK2 2200 //usecs
 enum vm_credits {
 	DOM0_CREDITS = 1,
-	VM1_CREDITS  = 9,
-	VM2_CREDITS  = 0,
+	VM1_CREDITS  = 4,
+	VM2_CREDITS  = 5,
 };
 
 #endif
