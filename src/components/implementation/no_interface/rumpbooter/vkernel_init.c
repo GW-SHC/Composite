@@ -127,7 +127,7 @@ vm0_io_fn(void *d)
 	//       if(budget < 60000) printc("budget: %lu\n", budget);
 	//	printc("line %d\n", (int)line);
 		if (line == 0) {
-		//	cos_switch(BOOT_CAPTBL_SELF_INITTHD_BASE, BOOT_CAPTBL_SELF_INITTCAP_BASE, DLVM_PRIO, 0, 0, cos_sched_sync());
+			//	cos_switch(BOOT_CAPTBL_SELF_INITTHD_BASE, BOOT_CAPTBL_SELF_INITTCAP_BASE, DLVM_PRIO, 0, 0, cos_sched_sync());
 			continue;
 		}
 		intr_start(irqline);
@@ -166,11 +166,16 @@ setup_credits(void)
 					total_credits += (DOM0_CREDITS * VM_TIMESLICE * cycs_per_usec);
 					break;
 				case 1:
-					vmcredits[i] = (VM1_CREDITS * VM_TIMESLICE * cycs_per_usec);
+					#ifdef GRAPHTP
+						vmcredits[i] = TCAP_RES_INF;
+					#else
+					//	vmcredits[i] = (VM1_CREDITS * VM_TIMESLICE * cycs_per_usec);
+					#endif
+					
 					total_credits += (VM1_CREDITS * VM_TIMESLICE * cycs_per_usec);
 					break;
 				case 2:
-					//vmcredits[i] = (VM2_CREDITS * VM_TIMESLICE * cycs_per_usec);
+					vmcredits[i] = (VM2_CREDITS * VM_TIMESLICE * cycs_per_usec);
 					//vmcredits[i] = (VM2_CREDITS * VM_TIMESLICE * cycs_per_usec);
 					total_credits += (VM2_CREDITS * VM_TIMESLICE * cycs_per_usec);
 					break;
@@ -180,6 +185,9 @@ setup_credits(void)
 			}
 		} 
 	}
+#ifdef GRAPHTP
+	total_credits=10*cycs_per_msec;
+#endif
 }
 
 void
@@ -208,7 +216,6 @@ fillup_budgets(void)
 	
 	for (i = 0 ; i < COS_VIRT_MACH_COUNT; i++) {
 		vm_cr_reset[0] = 1;
-
 
 		/* Never insert DL_VM in the runqueue */
 		//if (vmprio[i] == PRIO_HIGH)     runqueue[0] = i;
@@ -348,12 +355,11 @@ sched_vm(void)
 void
 bootup_hack(void)
 {
-	boot_dlvm_sched_fn(2);
 	bootup_sched_fn(1);
 	bootup_sched_fn(0);
+	boot_dlvm_sched_fn(2);
 
 	printc("BOOTUP DONE\n");
-	//while(1);
 }
 
 #define YIELD_CYCS 10000
@@ -535,6 +541,7 @@ vm_exit(void *id)
 	vmstatus[(int)id] = VM_EXITED;
 	/* do you want to spend time in printing? timer interrupt can screw with you, be careful */
 	printc("VM %d Exiting\n", (int)id);
+	while(1){}
 	//while (1) cos_thd_switch(BOOT_CAPTBL_SELF_INITTHD_BASE);
 	while (1) cos_thd_switch(sched_thd);
 }

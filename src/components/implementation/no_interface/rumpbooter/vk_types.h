@@ -77,6 +77,32 @@ unsigned int vio_deficit[COS_VIRT_MACH_COUNT - 1][COS_VIRT_MACH_COUNT - 1];
  */
 unsigned int dom0_vio_deficit[COS_VIRT_MACH_COUNT - 1]; 
 
+#define GRAPHTP
+
+#ifdef GRAPHTP
+
+#define WK1 250 //usecs
+#define WK2 250 //usecs
+
+enum vm_credits {
+	DOM0_CREDITS = 1,
+	VM1_CREDITS  = 4,
+	VM2_CREDITS  = 1,
+};
+
+#else
+
+#define WK1 4000 //usecs
+#define WK2 4000 //usecs
+enum vm_credits {
+	DOM0_CREDITS = 1,
+	VM1_CREDITS  = 9,
+	VM2_CREDITS  = 0,
+};
+
+#endif
+
+
 enum vm_status {
 	VM_RUNNING = 0,
 	VM_BLOCKED = 1,
@@ -84,11 +110,6 @@ enum vm_status {
 	VM_EXITED = 3,
 };
 
-enum vm_credits {
-	DOM0_CREDITS = 1,
-	VM1_CREDITS  = 4,
-	VM2_CREDITS  = 5,
-};
 
 enum {
 	VM_CAPTBL_SELF_EXITTHD_BASE    = BOOT_CAPTBL_FREE,

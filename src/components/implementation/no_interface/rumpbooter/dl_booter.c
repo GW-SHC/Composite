@@ -38,7 +38,7 @@ dl_work_two(void * ignore)
 	while(1) {
 		assert(run == 2);
 
-		spin_usecs(2000);
+		spin_usecs(WK2);
 		if (!ps_cas(&run, c, n)) assert(0);
 		cos_thd_switch(BOOT_CAPTBL_SELF_INITTHD_BASE);
 	}
@@ -52,7 +52,7 @@ dl_work_one(void * ignore)
 	while(1) {
 		assert(run == 1);
 
-		spin_usecs(2000);
+		spin_usecs(WK1);
 		if (!ps_cas(&run, c, n)) assert(0);
 		cos_thd_switch(BOOT_CAPTBL_SELF_INITTHD_BASE);
 	}
@@ -88,7 +88,7 @@ void
 check_delegate(void) {
 		cycles_t now;
 		rdtscll(now);
-		tcap_res_t min = cycs_per_msec;
+		tcap_res_t min = cycs_per_msec/3;
 
 
 		tcap_res_t budget = (tcap_res_t)cos_introspect(&booter_info, BOOT_CAPTBL_SELF_INITTCAP_BASE, TCAP_GET_BUDGET);
@@ -119,7 +119,7 @@ dl_booter_init(void)
 	w2 = cos_thd_alloc(&booter_info, booter_info.comp_cap, dl_work_two, NULL);
 	assert(w2);
 
-	if(cos_tcap_delegate(VM_CAPTBL_SELF_IOASND_BASE, BOOT_CAPTBL_SELF_INITTCAP_BASE, cycs_per_msec, DLVM_PRIO, 0)) assert(0);
+	if(cos_tcap_delegate(VM_CAPTBL_SELF_IOASND_BASE, BOOT_CAPTBL_SELF_INITTCAP_BASE, cycs_per_msec/3, DLVM_PRIO, 0)) assert(0);
 	
 	while(1) {
 		cycles_t now;
