@@ -40,8 +40,6 @@ enum vm_prio {
 	PRIO_MID   = TCAP_PRIO_MAX+1,
 };
 
-#define PERIOD 10000
-
 #define HPET_PERIOD_MS 10
 #define HPET_PERIOD_US (HPET_PERIOD_MS*1000)
 
@@ -77,27 +75,33 @@ unsigned int vio_deficit[COS_VIRT_MACH_COUNT - 1][COS_VIRT_MACH_COUNT - 1];
  */
 unsigned int dom0_vio_deficit[COS_VIRT_MACH_COUNT - 1]; 
 
-#define GRAPHTP
+#undef GRAPHTP
 
 #ifdef GRAPHTP
 
-#define WK1 250 //usecs
-#define WK2 250 //usecs
+#define WK1 300 //usecs
+#define WK2 200 //usecs
 
 enum vm_credits {
 	DOM0_CREDITS = 1,
+	DOM0_PERIOD  = 10,
 	VM1_CREDITS  = 4,
+	VM1_PERIOD   = 10,
 	VM2_CREDITS  = 1,
+	VM2_PERIOD   = 10,
 };
 
 #else
 
 #define WK1 2000 //usecs
-#define WK2 2200 //usecs
+#define WK2 2500 //usecs
 enum vm_credits {
 	DOM0_CREDITS = 1,
+	DOM0_PERIOD  = 10,
 	VM1_CREDITS  = 4,
-	VM2_CREDITS  = 5,
+	VM1_PERIOD   = 10,
+	VM2_CREDITS  = 6,
+	VM2_PERIOD   = 10,
 };
 
 #endif

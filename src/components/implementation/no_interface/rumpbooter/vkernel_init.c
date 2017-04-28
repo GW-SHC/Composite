@@ -40,6 +40,8 @@ tcap_prio_t vmprio[COS_VIRT_MACH_COUNT];
 int vmstatus[COS_VIRT_MACH_COUNT];
 /* only two indices cause it should never have DL_VM in it */
 int runqueue[COS_VIRT_MACH_COUNT-1];
+cycles_t vmperiod[COS_VIRT_MACH_COUNT];
+cycles_t vmlastperiod[COS_VIRT_MACH_COUNT];
 
 /*
  * I/O transfer caps from VM0 <=> VMx
@@ -156,10 +158,12 @@ setup_credits(void)
 	total_credits = 0;
 
 	for (i = 0 ; i < COS_VIRT_MACH_COUNT ; i ++) {
+		vmperiod[i] = vmlastperiod[i] = 0;
 		if (vmstatus[i] != VM_EXITED) {
 			switch (i) {
 				case 0:
 					vmcredits[i] = (DOM0_CREDITS * VM_TIMESLICE * cycs_per_usec);
+					vmperiod[i] = (DOM0_PERIOD * VM_MS_TIMESLICE * cycs_per_msec);
 					total_credits += (DOM0_CREDITS * VM_TIMESLICE * cycs_per_usec);
 					break;
 				case 1:
@@ -167,12 +171,14 @@ setup_credits(void)
 						vmcredits[i] = TCAP_RES_INF;
 					#else
 						vmcredits[i] = (VM1_CREDITS * VM_TIMESLICE * cycs_per_usec);
+						vmperiod[i] = (VM2_PERIOD * VM_MS_TIMESLICE * cycs_per_msec);
 					#endif
 					
 					total_credits += (VM1_CREDITS * VM_TIMESLICE * cycs_per_usec);
 					break;
 				case 2:
 					vmcredits[i] = (VM2_CREDITS * VM_TIMESLICE * cycs_per_usec);
+					vmperiod[i] = (VM2_PERIOD * VM_MS_TIMESLICE * cycs_per_msec);
 					//vmcredits[i] = (VM2_CREDITS * VM_TIMESLICE * cycs_per_usec);
 					total_credits += (VM2_CREDITS * VM_TIMESLICE * cycs_per_usec);
 					break;
@@ -274,12 +280,36 @@ boot_dlvm_sched_fn(int index)
 	return 1;
 }
 
+#define VARIABLE_PERIODS
+
 uint64_t t_vm_cycs  = 0;
 uint64_t t_dom_cycs = 0;
 
 static void
 chk_replenish_budgets(void)
 {
+#ifdef VARIABLE_PERIODS
+	int i;
+	cycles_t now;
+
+	rdtscll(now);
+
+	for (i = 0 ; i < COS_VIRT_MACH_COUNT ; i++) {
+		if (!vmperiod[i] && vmlastperiod[i]) continue;
+
+		if (vmlastperiod[i] == 0 || (now - vmlastperiod[i] >= vmperiod[i])) {
+			tcap_res_t budget = 0, transfer_budget = 0;
+
+			vmlastperiod[i] = now;
+			budget = (tcap_res_t)cos_introspect(&vkern_info, vminittcap[i], TCAP_GET_BUDGET);
+			transfer_budget = vmcredits[i] - budget;
+
+			if (TCAP_RES_IS_INF(budget) || budget > vmcredits[i]) continue;
+			if ((cos_tcap_transfer(vminitrcv[i], sched_tcap, transfer_budget, vmprio[i]))) assert(0);
+		}
+	}
+
+#else
 	int i;
 	static cycles_t last_replenishment = 0;
 	cycles_t now;
@@ -301,6 +331,7 @@ chk_replenish_budgets(void)
 			if ((cos_tcap_transfer(vminitrcv[i], sched_tcap, transfer_budget, vmprio[i]))) assert(0);
 		}
 	}
+#endif
 }
 
 static void
