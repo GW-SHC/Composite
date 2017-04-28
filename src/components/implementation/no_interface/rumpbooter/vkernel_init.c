@@ -42,6 +42,7 @@ int vmstatus[COS_VIRT_MACH_COUNT];
 int runqueue[COS_VIRT_MACH_COUNT-1];
 cycles_t vmperiod[COS_VIRT_MACH_COUNT];
 cycles_t vmlastperiod[COS_VIRT_MACH_COUNT];
+u32_t vmruncount[COS_VIRT_MACH_COUNT];
 
 /*
  * I/O transfer caps from VM0 <=> VMx
@@ -158,6 +159,7 @@ setup_credits(void)
 	total_credits = 0;
 
 	for (i = 0 ; i < COS_VIRT_MACH_COUNT ; i ++) {
+		vmruncount[i] = 0;
 		vmcredits[i] = 0;
 		vmperiod[i] = vmlastperiod[i] = 0;
 		if (vmstatus[i] != VM_EXITED) {
@@ -171,8 +173,8 @@ setup_credits(void)
 					#ifdef GRAPHTP
 						vmcredits[i] = TCAP_RES_INF;
 					#else
-						vmcredits[i] = (VM1_CREDITS * VM_TIMESLICE * cycs_per_usec);
-						vmperiod[i] = (VM2_PERIOD * VM_MS_TIMESLICE * cycs_per_msec);
+						vmcredits[i] = (VM1_CREDITS * VM_MS_TIMESLICE * cycs_per_msec);
+						vmperiod[i] = (VM1_PERIOD * VM_MS_TIMESLICE * cycs_per_msec);
 					#endif
 					
 					total_credits += (VM1_CREDITS * VM_TIMESLICE * cycs_per_usec);
@@ -180,7 +182,6 @@ setup_credits(void)
 				case 2:
 					vmcredits[i] = (VM2_CREDITS * VM_TIMESLICE * cycs_per_usec);
 					vmperiod[i] = (VM2_PERIOD * VM_MS_TIMESLICE * cycs_per_msec);
-					//vmcredits[i] = (VM2_CREDITS * VM_TIMESLICE * cycs_per_usec);
 					total_credits += (VM2_CREDITS * VM_TIMESLICE * cycs_per_usec);
 					break;
 				default: assert(0);
@@ -302,6 +303,8 @@ chk_replenish_budgets(void)
 			tcap_res_t budget = 0, transfer_budget = 0;
 
 			vmlastperiod[i] = now;
+			/* cpu vm is only unblocked on replenishment */
+			if (i == CPU_VM && vmstatus[i] != VM_EXITED) vmstatus[i] = VM_RUNNING;
 			budget = (tcap_res_t)cos_introspect(&vkern_info, vminittcap[i], TCAP_GET_BUDGET);
 			transfer_budget = vmcredits[i] - budget;
 
@@ -349,7 +352,7 @@ wakeup_vms(unsigned x)
 		last_wakeup = now;
 		/* Skips DLVM (should never be in VL runqueue) */
 		for (i = 0 ; i < COS_VIRT_MACH_COUNT; i ++) {
-			if (i == DL_VM || vmstatus[i] == VM_EXITED) continue;
+			if (i == DL_VM || i == CPU_VM || vmstatus[i] == VM_EXITED) continue;
 
 			vmstatus[i] = VM_RUNNING;
 		}
@@ -384,13 +387,14 @@ sched_vm(void)
 void
 bootup_hack(void)
 {
-	bootup_sched_fn(1);
+	if (CPU_VM != 1) bootup_sched_fn(1);
 	bootup_sched_fn(0);
 	boot_dlvm_sched_fn(2);
 
 	printc("BOOTUP DONE\n");
 }
 
+#define START_CPUBOUND 50
 #define YIELD_CYCS 10000
 void
 sched_fn(void *x)
@@ -434,6 +438,7 @@ sched_fn(void *x)
 		tcap_res_t sched_budget = 0, transfer_budget = 0;
 		tcap_res_t min_budget = VM_MIN_TIMESLICE * cycs_per_usec;
 		int index = 0;
+		int ret;
 		
 		wakeup_vms(1);
 		do {
@@ -443,6 +448,10 @@ sched_fn(void *x)
 			pending = cos_sched_rcv_all(sched_rcv, &rcvd, &tid, &blocked, &cycles);
 			if (!tid) continue;
 			
+			if (CPU_VM < COS_VIRT_MACH_COUNT && tid == vm_main_thdid[CPU_VM] && cycles) {
+				vmstatus[CPU_VM] = VM_EXPENDED;
+				continue;
+			}
 			if (tid == vm_main_thdid[DL_VM]) continue; //don't worry if DL_VM is blocked on unblocked..
 			for (i = 0; i < COS_VIRT_MACH_COUNT ; i++) {
 				if (tid == vm_main_thdid[i]) {
@@ -452,8 +461,10 @@ sched_fn(void *x)
 			}
 		} while (pending);
 		
-		
 		chk_replenish_budgets();
+
+		/* do not run cpu-bound vm for until dom0 is booted up */
+		if (vmruncount[0] < START_CPUBOUND && CPU_VM < COS_VIRT_MACH_COUNT) vmstatus[CPU_VM] = VM_BLOCKED;
 		
 		index = sched_vm();
 #ifdef JUST_RR
@@ -463,8 +474,15 @@ sched_fn(void *x)
 		assert(index != DL_VM);
 		assert(vmstatus[index] == VM_RUNNING);
 #endif
-
-		if (cos_asnd(vksndvm[index], 1)) assert(0);
+		vmruncount[index] ++;
+		if (index == CPU_VM) {
+			do {
+				ret = cos_switch(vm_main_thd[index], vminittcap[index], vmprio[index], 0, sched_rcv, cos_sched_sync());
+				assert(ret == 0 || ret == -EAGAIN);
+			} while (ret == -EAGAIN);
+		} else {
+			if (cos_asnd(vksndvm[index], 1)) assert(0);
+		}
 	}
 }
 
