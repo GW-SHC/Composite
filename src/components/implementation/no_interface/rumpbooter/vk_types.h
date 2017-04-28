@@ -100,12 +100,11 @@ enum vm_credits {
 	DOM0_PERIOD  = 10,
 	VM1_CREDITS  = 4,
 	VM1_PERIOD   = 10,
-	VM2_CREDITS  = 6,
+	VM2_CREDITS  = 5,
 	VM2_PERIOD   = 10,
 };
 
 #endif
-
 
 enum vm_status {
 	VM_RUNNING = 0,
@@ -113,7 +112,6 @@ enum vm_status {
 	VM_EXPENDED = 2,
 	VM_EXITED = 3,
 };
-
 
 enum {
 	VM_CAPTBL_SELF_EXITTHD_BASE    = BOOT_CAPTBL_FREE,

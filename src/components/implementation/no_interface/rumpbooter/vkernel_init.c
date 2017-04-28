@@ -158,6 +158,7 @@ setup_credits(void)
 	total_credits = 0;
 
 	for (i = 0 ; i < COS_VIRT_MACH_COUNT ; i ++) {
+		vmcredits[i] = 0;
 		vmperiod[i] = vmlastperiod[i] = 0;
 		if (vmstatus[i] != VM_EXITED) {
 			switch (i) {
@@ -295,7 +296,7 @@ chk_replenish_budgets(void)
 	rdtscll(now);
 
 	for (i = 0 ; i < COS_VIRT_MACH_COUNT ; i++) {
-		if (!vmperiod[i] && vmlastperiod[i]) continue;
+		if (!vmcredits[i] || (!vmperiod[i] && vmlastperiod[i])) continue;
 
 		if (vmlastperiod[i] == 0 || (now - vmlastperiod[i] >= vmperiod[i])) {
 			tcap_res_t budget = 0, transfer_budget = 0;

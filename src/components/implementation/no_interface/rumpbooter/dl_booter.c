@@ -90,7 +90,6 @@ check_delegate(void) {
 		rdtscll(now);
 		tcap_res_t min = cycs_per_msec/3;
 
-
 		tcap_res_t budget = (tcap_res_t)cos_introspect(&booter_info, BOOT_CAPTBL_SELF_INITTCAP_BASE, TCAP_GET_BUDGET);
 		tcap_res_t res;
 		
@@ -98,6 +97,7 @@ check_delegate(void) {
 		else if (budget != 0) {
 			res = budget/2; 
 		} else {
+			assert(0);
 			return; /* 0 = 100% budget */
 		}
 
