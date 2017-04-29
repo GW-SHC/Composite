@@ -282,7 +282,7 @@ boot_dlvm_sched_fn(int index)
 	return 1;
 }
 
-#define VARIABLE_PERIODS
+#undef VARIABLE_PERIODS
 
 uint64_t t_vm_cycs  = 0;
 uint64_t t_dom_cycs = 0;
