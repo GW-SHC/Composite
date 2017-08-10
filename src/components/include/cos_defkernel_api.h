@@ -2,6 +2,21 @@
  * Copyright 2016, Phani Gadepalli and Gabriel Parmer, GWU, gparmer@gwu.edu.
  *
  * This uses a two clause BSD License.
+ *
+ * This API is layered on top of the cos_kernel_api and simply makes
+ * some assumptions about capability setup, but provides a much
+ * simpler API to use for creating and using asynchronous end-points.
+ *
+ * The main assumptions this API makes are: the initial tcap provided
+ * in the bootup protocol is used along with the initial thread as the
+ * parent tcap that schedules all others.  The asynchronous receive
+ * end-points are created as a package of receive end-point, thread to
+ * receive from the end-point, and tcap (which can be provided as a
+ * separate argument).
+ *
+ * This API provides a wrapper structure around the cos_compinfo
+ * (cos_definfo) to include the information about the root scheduling
+ * thread and tcap.
  */
 
 #ifndef COS_DEFKERNEL_API_H
