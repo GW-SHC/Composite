@@ -23,6 +23,7 @@
 #endif
 
 typedef unsigned long word_t;
+
 typedef u64_t cycles_t;
 typedef u64_t microsec_t;
 typedef unsigned long tcap_res_t;
@@ -50,6 +51,9 @@ tcap_cyc2time(cycles_t c) {
 	tcap_time_t t = (tcap_time_t)(c >> TCAP_TIME_QUANTUM_ORD);
 	return t == TCAP_TIME_NIL ? 1 : t;
 }
+
+// #define CYCLES_DIFF_THRESH (1<<10)
+
 static inline int
 cycles_same(cycles_t a, cycles_t b, cycles_t diff_thresh)
 { return (b < a ? a - b : b - a) <= diff_thresh; }
@@ -245,19 +249,25 @@ enum {
 	BOOT_CAPTBL_SELF_INITTCAP_BASE = BOOT_CAPTBL_SELF_INITTHD_BASE + NUM_CPU_COS*CAP16B_IDSZ,
 	BOOT_CAPTBL_SELF_INITRCV_BASE  = round_up_to_pow2(BOOT_CAPTBL_SELF_INITTCAP_BASE + NUM_CPU_COS*CAP16B_IDSZ, CAPMAX_ENTRY_SZ),
 	BOOT_CAPTBL_SELF_INITHW_BASE   = round_up_to_pow2(BOOT_CAPTBL_SELF_INITRCV_BASE + NUM_CPU_COS*CAP64B_IDSZ, CAPMAX_ENTRY_SZ),
-	BOOT_CAPTBL_LAST_CAP           = BOOT_CAPTBL_SELF_INITHW_BASE + CAP32B_IDSZ,
+	BOOT_CAPTBL_LAST_CAP           = round_up_to_pow2(BOOT_CAPTBL_SELF_INITHW_BASE + CAP32B_IDSZ, CAPMAX_ENTRY_SZ),
 	/* round up to next entry */
-	BOOT_CAPTBL_FREE               = round_up_to_pow2(BOOT_CAPTBL_LAST_CAP, CAPMAX_ENTRY_SZ)
+	BOOT_CAPTBL_FREE               = round_up_to_pow2(BOOT_CAPTBL_LAST_CAP, CAPMAX_ENTRY_SZ),
 };
 
 enum {
 	BOOT_MEM_VM_BASE = (COS_MEM_COMP_START_VA + (1<<22)), /* @ 1G + 8M */
+	BOOT_MEM_SHM_BASE = 0x80000000, /* shared memory region @ 512MB */
 	BOOT_MEM_KM_BASE = PGD_SIZE, /* kernel & user memory @ 4M, pgd aligned start address */
 };
 
 enum {
 	/* thread id */
 	THD_GET_TID,
+};
+
+/* Tcap info */
+enum {
+	TCAP_GET_BUDGET,
 };
 
 enum {
