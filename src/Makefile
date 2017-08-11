@@ -67,11 +67,7 @@ config-linux: config-gen
 config-i386: config-gen
 	@echo "#define COS_PLATFORM I386" >> ./kernel/include/shared/cpu_ghz.h
 	@cd kernel/include/ ; rm -f chal ; ln -s ../../platform/i386/chal/ chal
-<<<<<<< HEAD
-	@echo "i386" > platform_info
-=======
 	@echo "i386" > PLATFORM_ID
->>>>>>> upstream/ppos
 
 idl:
 	$(MAKE) $(MAKEFLAGS) -C components idl

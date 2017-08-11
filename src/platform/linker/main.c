@@ -56,30 +56,12 @@ main(int argc, char *argv[])
 	char *delim = ":";
 	char *servs, *dependencies = NULL, *ndeps = NULL, *stub_gen_prog;
 	long service_addr;
-	char *usage = "Usage: %s [-q] <comma separated string of all "
+
+	if (argc != 3) {
+		printl(PRINT_HIGH, "Usage: %s [-q] <comma separated string of all "
                "objs:truster1-trustee1|trustee2|...;truster2-...> "
-               "<path to gen_client_stub> [-v|--verbose] [-q|--quiet]\n";
-
-	if (argc < 3) {
-		printl(PRINT_HIGH, usage, argv[0]);
+               "<path to gen_client_stub>\n", argv[0]);
 		return 1;
-	}
-
-	if (argc > 3) {
-	     	if(!strcmp(argv[3], "-v") ||
-		   !strcmp(argv[3], "--verbose")) {
-			print_lvl = PRINT_DEBUG;
-		}
-
-		else if(!strcmp(argv[3], "-q") ||
-		   !strcmp(argv[3], "--quiet")) {
-			print_lvl = PRINT_NONE;
-		}
-
-		else {
-			printl(PRINT_HIGH, usage, argv[0]);
-			return 1;
-		}
 	}
 
 	stub_gen_prog = argv[2];

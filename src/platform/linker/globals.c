@@ -13,7 +13,6 @@
 
 enum {PRINT_NONE = 0, PRINT_HIGH, PRINT_NORMAL, PRINT_DEBUG} print_lvl = PRINT_HIGH;
 
-
 const char *COMP_INFO      = "cos_comp_info";
 const char *SCHED_NOTIF    = "cos_sched_notifications";
 const char *INIT_COMP      = "c0.o";
@@ -70,13 +69,6 @@ struct cos_sections section_info[MAXSEC_S+1] = {
 		.sname      = ".rodata"
 	},
 	{
-		.secid      = INITFINI_S,
-		.cobj_flags = COBJ_SECT_READ | COBJ_SECT_INITONCE,
-		.coalesce   = 1,
-		.sname      = ".initfini"
-
-	},
-	{
 		.secid      = CTORS_S,
 		.cobj_flags = COBJ_SECT_READ | COBJ_SECT_INITONCE,
 		.coalesce   = 1,
@@ -121,31 +113,11 @@ struct cos_sections section_info[MAXSEC_S+1] = {
 		.cobj_flags = COBJ_SECT_READ | COBJ_SECT_WRITE,
 		.sname      = ".data"
 	},
-//	{
-//		.secid      = TDATA_S,
-//		.cobj_flags = COBJ_SECT_READ | COBJ_SECT_WRITE,
-//		.sname      = ".tdata"
-//	},
-//	{
-//		.secid      = DATA_CACHELINE_ALIGNED_S,
-//		.cobj_flags = COBJ_SECT_READ | COBJ_SECT_WRITE,
-//		.sname      = ".data.cacheline_aligned"
-//	},
-//	{
-//		.secid      = DATA_READ_MOSTLY_S,
-//		.cobj_flags = COBJ_SECT_READ | COBJ_SECT_WRITE,
-//		.sname      = ".data.read_mostly"
-//	},
 	{
 		.secid      = BSS_S,
 		.cobj_flags = COBJ_SECT_READ | COBJ_SECT_WRITE | COBJ_SECT_ZEROS,
 		.sname      = ".bss"
 	},
-//	{
-//		.secid      = TBSS_S,
-//		.cobj_flags = COBJ_SECT_READ | COBJ_SECT_WRITE | COBJ_SECT_ZEROS,
-//		.sname      = ".tbss"
-//	},
 	{
 		.secid      = INITONCE_S,
 		.cobj_flags = COBJ_SECT_READ | COBJ_SECT_WRITE | COBJ_SECT_ZEROS | COBJ_SECT_INITONCE,

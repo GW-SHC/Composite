@@ -92,7 +92,6 @@ __tcap_budget_xfer(struct tcap *d, struct tcap *s, tcap_res_t cycles)
 done:
 	if (!tcap_is_active(d)) tcap_active_add_before(s, d);
 	if (tcap_expended(s))   tcap_active_rem(s);
-	/* TODO: what if this is the current tcap? we should set a small timeout, so it gets switched away from */
 
 	return 0;
 }
