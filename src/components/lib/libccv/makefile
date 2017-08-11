@@ -1,4 +1,4 @@
-CC := ../musl-1.1.11/bin/musl-gcc
+CC := ../dietlibc-0.29/bin-i386/diet gcc 
 AR := ar
 CFLAGS := -Wall -nostdinc -nostdlib -fno-stack-protector
 

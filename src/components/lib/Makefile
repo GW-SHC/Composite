@@ -10,8 +10,8 @@ SIMPLE_STKLIB=simple_stklib.o
 CINC_ENV=$(CINC)
 export CINC_ENV
 
-.PHONY: all sl
-all: $(LIBS) $(MAND) $(SIMPLE_STKLIB) sl 
+.PHONY: all
+all: $(LIBS) $(MAND) $(SIMPLE_STKLIB)
 
 # we have to compile these without dietlibc so that there are not
 # symbol conflicts and this is why we have the %.a here and don't
@@ -24,11 +24,9 @@ all: $(LIBS) $(MAND) $(SIMPLE_STKLIB) sl
 $(MAND): $(MANDITORY)
 	@$(LD) $(LDFLAGS) -r -o $@ $^
 
+
 $(SIMPLE_STKLIB): $(SIMPLE_STACKS)
 	@$(LD) $(LDFLAGS) -r -o $@ $^
-
-sl:
-	make $(MAKEFLAGS) -C sl
 
 %.o:%.S
 	$(info |     [AS]   Compiling assembly file $^ into $@)
@@ -41,39 +39,26 @@ sl:
 clean:
 	$(info |     [RM]   Cleaning up directory)
 	@rm -f a.out *.o *.a *.d *~
-	make -C sl clean
 
 distclean:
-	make -C musl-1.1.11 distclean
-	make -C lwip/cos clean
-	make -C lua/cos clean
+	make -C dietlibc-0.29 clean
+	make -C ps clean
+#	make -C lwip/cos clean
+#	make -C lua/cos clean
 # keep the following commands in one line. make executes each line
 # with a new shell.
 #	cd ck; ./configure; cd ..
 #	make -C ck distclean
-	make -C posix clean
-	make -C libcxx clean
+#	make -C posix clean
 #	make -C libccv clean
 
-musl:
-	cd musl-1.1.11; ./configure --disable-shared; cd ..
-	make -C musl-1.1.11
-	make -C musl-1.1.11 install
-
-ck:
+thirdparty:
+	make -C dietlibc-0.29
+	make -C dietlibc-0.29 i386
 	cd ck; ./configure; cd ..
-
-ps:
 	cd ps; ./configure cos x86; cd ..; make -C ps config ; make -C ps all
 
-
-init: clean distclean musl ck ps all
-#	make -C lwip/cos
-#	make -C lua/cos
-# keep the following commands in one line. Same as above.
-	make -C posix
-	make -C libcxx
-
+init: clean distclean thirdparty all
 #	make -C lwip/cos
 #	make -C lua/cos
 # keep the following commands in one line. Same as above.

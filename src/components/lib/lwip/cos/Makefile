@@ -46,9 +46,9 @@ ARFLAGS=rs
 #Set this to where you have the lwip core module checked out from CVS
 #default assumes it's a dir named lwip at the same level as the contrib module
 LWIPDIR=../lwip-1.3.0/src
-MUSLINC=../../musl-1.1.11/include/
+DIETINC=../../dietlibc-0.29/include/
 
-INCLUDES=-I$(LWIPDIR)/include -I./include -I$(LWIPDIR)/include/ipv4 -I. $(CINC) -I$(MUSLINC)
+INCLUDES=-I$(LWIPDIR)/include -I./include -I$(LWIPDIR)/include/ipv4 -I. $(CINC) -I$(DIETINC)
 CFLAGS:=$(CFLAGS) $(INCLUDES)
 
 

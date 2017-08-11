@@ -22,7 +22,7 @@ clean:
 cp:
 
 .PHONY: init
-init: clean
+init: clean all
 
 #.PHONY: idl
 idl:

@@ -113,6 +113,17 @@ struct route routing_tbl[] = {
 	}
 };
 
+static inline int strnlen(char *s, int max)
+{
+	int i;
+
+	assert(s);
+	for (i = 0 ; i < max ; i++) {
+		if (s[i] == '\0') return i;
+	}
+	return max;
+}
+
 static struct provider_fns *route_lookup(char *path, int sz)
 {
 	int i;

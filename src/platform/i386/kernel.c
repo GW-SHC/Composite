@@ -163,7 +163,6 @@ kmain(struct multiboot *mboot, u32_t mboot_magic, u32_t esp)
 #endif
 
 	kern_boot_comp();
-	smp_init();
 	timer_init();
 	lapic_timer_init();
 	kern_boot_upcall();

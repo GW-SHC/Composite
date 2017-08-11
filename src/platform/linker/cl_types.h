@@ -34,8 +34,6 @@ typedef enum {
 	INITFINI_S,
 	CTORS_S,
 	DTORS_S,
-	INIT_ARRAY_S,
-	FINI_ARRAY_S,
 	CRECOV_S,
 	KMEM_S,
 	CINFO_S,

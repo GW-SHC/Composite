@@ -1,4 +1,3 @@
-**/.DS_Store
 *.o
 *.tmp
 *.d
@@ -17,7 +16,6 @@
 composite_new
 *.out
 tags
-src/components/lib/musl-1.1.11/bin/musl-gcc
 src/kernel/include/shared/cpu_ghz.h
 src/Makefile.cosconfig
 src/PLATFORM
@@ -31,4 +29,3 @@ GPATH
 GRTAGS
 GSYMS
 GTAGS
-.vagrant

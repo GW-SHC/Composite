@@ -55,14 +55,14 @@ test_thds(void)
 		assert(ts[i]);
 		tls_test[i] = i;
 		cos_thd_mod(&booter_info, ts[i], &tls_test[i]);
-		PRINTC("switchto %d\n", (int)ts[i]);
+		PRINTC("switchto %d @ %x\n", (int)ts[i], cos_introspect(&booter_info, ts[i], THD_GET_IP));
 		cos_thd_switch(ts[i]);
 	}
 
 	PRINTC("test done\n");
 }
 
-#define TEST_NPAGES (1024 * 2) 	/* Testing with 8MB for now */
+#define TEST_NPAGES (1024*2) 	/* Testing with 8MB for now */
 
 static void
 test_mem(void)
@@ -83,16 +83,11 @@ test_mem(void)
 	prev = s;
 	for (i = 0 ; i < TEST_NPAGES ; i++) {
 		t = cos_page_bump_alloc(&booter_info);
-		assert(t && t == prev + PAGE_SIZE);
+		assert(t && t == prev + 4096);
 		prev = t;
 	}
-	memset(s, 0, TEST_NPAGES * PAGE_SIZE);
+	memset(s, 0, TEST_NPAGES * 4096);
 	PRINTC("SUCCESS: Allocated and zeroed %d pages.\n", TEST_NPAGES);
-
-	t = cos_page_bump_allocn(&booter_info, TEST_NPAGES * PAGE_SIZE);
-	assert(t);
-	memset(t, 0, TEST_NPAGES * PAGE_SIZE);
-	PRINTC("SUCCESS: Atomically allocated and zeroed %d pages.\n", TEST_NPAGES);
 }
 
 volatile arcvcap_t rcc_global, rcp_global;
@@ -106,10 +101,10 @@ async_thd_fn_perf(void *thdcap)
 	arcvcap_t rc = rcc_global;
 	int i;
 
-	cos_rcv(rc, 0, NULL);
+	cos_rcv(rc);
 
 	for (i = 0 ; i < ITER + 1 ; i++) {
-		cos_rcv(rc, 0, NULL);
+		cos_rcv(rc);
 	}
 
 	cos_thd_switch(tc);
@@ -146,37 +141,18 @@ async_thd_fn(void *thdcap)
 {
 	thdcap_t tc = (thdcap_t)thdcap;
 	arcvcap_t rc = rcc_global;
-	int pending, rcvd;
-
+	int pending;
 
 	PRINTC("Asynchronous event thread handler.\n");
-	PRINTC("<-- rcving (non-blocking)...\n");
-	pending = cos_rcv(rc, RCV_NON_BLOCKING, NULL);
-	PRINTC("<-- pending %d\n", pending);
-
-	PRINTC("<-- rcving (non-blocking & all pending)...\n");
-	pending = cos_rcv(rc, RCV_NON_BLOCKING | RCV_ALL_PENDING, &rcvd);
-	PRINTC("<-- rcvd %d\n", rcvd);
-
-	PRINTC("<-- rcving (all pending)...\n");
-	pending = cos_rcv(rc, RCV_ALL_PENDING, &rcvd);
-	PRINTC("<-- rcvd %d\n", rcvd);
-
 	PRINTC("<-- rcving...\n");
-	pending = cos_rcv(rc, 0, NULL);
+	pending = cos_rcv(rc);
 	PRINTC("<-- pending %d\n", pending);
 	PRINTC("<-- rcving...\n");
-	pending = cos_rcv(rc, 0, NULL);
+	pending = cos_rcv(rc);
 	PRINTC("<-- pending %d\n", pending);
-
-	PRINTC("<-- rcving (non-blocking)...\n");
-	pending = cos_rcv(rc, RCV_NON_BLOCKING, NULL);
-	PRINTC("<-- pending %d\n", pending);
-	assert(pending == -EAGAIN);
 	PRINTC("<-- rcving...\n");
-	pending = cos_rcv(rc, 0, NULL);
+	pending = cos_rcv(rc);
 	PRINTC("<-- Error: manually returning to snding thread.\n");
-
 	cos_thd_switch(tc);
 	PRINTC("ERROR: in async thd *after* switching back to the snder.\n");
 	while (1) cos_thd_switch(tc);
@@ -195,31 +171,14 @@ async_thd_parent(void *thdcap)
 
 	PRINTC("--> sending\n");
 	ret     = cos_asnd(sc, 0);
-	PRINTC("--> sending\n");
-	ret     = cos_asnd(sc, 0);
-	PRINTC("--> sending\n");
-	ret     = cos_asnd(sc, 0);
-	PRINTC("--> sending\n");
-	ret     = cos_asnd(sc, 1);
-
-	PRINTC("--> sending\n");
-	ret     = cos_asnd(sc, 0);
-	PRINTC("--> sending\n");
-	ret     = cos_asnd(sc, 0);
-	PRINTC("--> sending\n");
-	ret     = cos_asnd(sc, 1);
-
-	PRINTC("--> sending\n");
-	ret     = cos_asnd(sc, 0);
 	if (ret) PRINTC("asnd returned %d.\n", ret);
 	PRINTC("--> Back in the asnder.\n");
 	PRINTC("--> sending\n");
 	ret     = cos_asnd(sc, 1);
 	if (ret) PRINTC("--> asnd returned %d.\n", ret);
-
 	PRINTC("--> Back in the asnder.\n");
 	PRINTC("--> receiving to get notifications\n");
-	pending = cos_sched_rcv(rc, 0, NULL, &tid, &blocked, &cycles);
+	pending = cos_sched_rcv(rc, &tid, &blocked, &cycles);
 	PRINTC("--> pending %d, thdid %d, blocked %d, cycles %lld\n", pending, tid, blocked, cycles);
 
 	async_test_flag = 0;
@@ -320,7 +279,7 @@ tcap_child(void *d)
 	while (1) {
 		int pending;
 
-		pending = cos_rcv(__tc_crc, 0, NULL);
+		pending = cos_rcv(__tc_crc);
 		PRINTC("tcap_test:rcv: pending %d\n", pending);
 	}
 }
@@ -401,7 +360,7 @@ test_timer(void)
 		if (i > 0) t += c-p;
 
 		/* FIXME: we should avoid calling this two times in the common case, return "more evts" */
-		while (cos_sched_rcv(BOOT_CAPTBL_SELF_INITRCV_BASE, 0, NULL, &tid, &blocked, &cycles) != 0) ;
+		while (cos_sched_rcv(BOOT_CAPTBL_SELF_INITRCV_BASE, &tid, &blocked, &cycles) != 0) ;
 	}
 
 	PRINTC("\tCycles per tick (1000 microseconds) = %lld, cycles threshold = %u\n",
@@ -481,7 +440,7 @@ test_budgets_single(void)
 		PRINTC("%lld,\t", e-s);
 
 		/* FIXME: we should avoid calling this two times in the common case, return "more evts" */
-		while (cos_sched_rcv(BOOT_CAPTBL_SELF_INITRCV_BASE, 0, NULL, &tid, &blocked, &cycles) != 0) ;
+		while (cos_sched_rcv(BOOT_CAPTBL_SELF_INITRCV_BASE, &tid, &blocked, &cycles) != 0) ;
 	}
 	PRINTC("Done.\n");
 }
@@ -517,7 +476,7 @@ test_budgets_multi(void)
 		rdtscll(e);
 		PRINTC("g:%llu c:%llu p:%llu => %llu,\t", mbt.g.cyc - s, mbt.c.cyc - s, mbt.p.cyc - s, e - s);
 
-		cos_sched_rcv(BOOT_CAPTBL_SELF_INITRCV_BASE, 0, NULL, &tid, &blocked, &cycles);
+		cos_sched_rcv(BOOT_CAPTBL_SELF_INITRCV_BASE, &tid, &blocked, &cycles);
 		PRINTC("%d=%llu\n", tid, cycles);
 	}
 	PRINTC("Done.\n");
@@ -584,9 +543,9 @@ intr_thd(void *d)
 {
 	struct exec_cluster *e = &(((struct activation_test_data *)d)->i);
 	struct exec_cluster *w = &(((struct activation_test_data *)d)->w);
-
+	
 	while (1) {
-		cos_rcv(e->rc, 0, NULL);
+		cos_rcv(e->rc);
 		seq_order_check(e);
 		cos_thd_wakeup(w->tc, w->tcc, w->prio, wakeup_budget_test ? TEST_WAKEUP_BUDGET : 0);
 	}
@@ -602,12 +561,12 @@ intr_sched_thd(void *d)
 	thdid_t tid;
 
 	while (1) {
-		cos_sched_rcv(e->rc, 0, NULL, &tid, &blocked, &cycs);
+		cos_sched_rcv(e->rc, &tid, &blocked, &cycs);
 		seq_order_check(e);
 		if (wakeup_budget_test) {
 			struct exec_cluster *w = &(((struct activation_test_data *)d)->w);
 			rdtscll(e->cyc);
-			printc(" | preempted worker @ %llu, budget: %lu=%lu |", e->cyc,
+			printc(" | preempted worker @ %llu, budget: %lu=%lu |", e->cyc, 
 			       (unsigned long)TEST_WAKEUP_BUDGET, (unsigned long)(e->cyc - w->cyc));
 		}
 	}
@@ -718,7 +677,7 @@ receiver_thd(void *d)
 	struct exec_cluster *e = &(((struct activation_test_data *)d)->w);
 
 	while (1) {
-		cos_rcv(e->rc, 0, NULL);
+		cos_rcv(e->rc);
 		seq_order_check(e);
 	}
 }
@@ -732,7 +691,7 @@ sender_thd(void *d)
 	while (1) {
 		cos_asnd(r->sc, 0);
 		seq_order_check(e);
-		cos_rcv(e->rc, 0, NULL);
+		cos_rcv(e->rc);
 	}
 }
 
@@ -763,7 +722,7 @@ test_preemption(void)
 	exec_cluster_alloc(&pat.w, receiver_thd, &pat, BOOT_CAPTBL_SELF_INITRCV_BASE);
 
 	/*
-	 * test case 1: Sender = H, Receiver: L
+	 * test case 1: Sender = H, Receiver: L 
 	 * - scheduler here is initthd (this thd)
 	 * expected result:
 	 * - cos_asnd from sender should add receiver as wakeup thread.
@@ -773,7 +732,7 @@ test_preemption(void)
 	test_preemption_case(&pat, TEST_PRIO_HIGH, TEST_PRIO_LOW, 0, 1);
 
 	/*
-	 * test case 2: Sender = L, Receiver: H
+	 * test case 2: Sender = L, Receiver: H 
 	 * - scheduler here is initthd (this thd)
 	 * expected result:
 	 * - cos_asnd from sender should trigger receiver activation and add sender as wakeup thread.

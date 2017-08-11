@@ -12,13 +12,13 @@ CC=gcc
 OPT=-O3 #-ggdb3
 CFLAGS=-Wall -DIPv4 -nostdinc -nostdlib $(OPT)
 
-#Set this to where you have the lua and the musllibc library files installed
+#Set this to where you have the lua and the dietlibc library files installed
 LUADIR=../lua-5.2.1/src
-MUSL=../../musl-1.1.11
-MUSLINC=$(MUSL)/include
-MUSLLIB=$(MUSL)/lib
+DIET=../../dietlibc-0.29
+DIETINC=$(DIET)/include
+DIETI386=$(DIET)/bin-i386
 
-INCLUDES=-I$(LUADIR)/include -I./include $(CINC) -I$(MUSLINC) -I$(MUSL)
+INCLUDES=-I$(LUADIR)/include -I./include $(CINC) -I$(DIETINC) -I$(DIET)
 CFLAGS:=$(CFLAGS) $(INCLUDES)
 
 COREFILES=$(LUADIR)/lapi.c \
@@ -54,12 +54,13 @@ $(LUADIR)/ltablib.c  \
 $(LUADIR)/loadlib.c  \
 $(LUADIR)/linit.c    
 
-MUSLLIBCA=$(MUSLLIB)/libc.a
-MUSLMATH=$(MUSLLIB)/libm.a
+DIETLIBCA=$(DIETI386)/dietlibc.a
+DIETMATH=$(DIETI386)/libm.a
+DIETMIPS=$(DIET)/mips/divdi3.c
 
-LUAFILES=$(COREFILES)
+LUAFILES=$(COREFILES) $(DIETMIPS)
 LUAFILESW=$(wildcard $(LUAFILES))
-LUAOBJS=$(notdir $(LUAFILESW:.c=.o)) $(MUSLLIBCA) $(MUSLMATH)
+LUAOBJS=$(notdir $(LUAFILESW:.c=.o)) $(DIETLIBCA) $(DIETMATH)
 
 
 

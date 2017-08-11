@@ -1,1 +1,0 @@
-../chal/chal_config.h
