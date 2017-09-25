@@ -120,10 +120,25 @@ test_shdmem(int shm_id, int arg2, int arg3, int arg4)
 	return 0;
 }
 
+/* For applications that wish to set up shared memory with RK, the app passes a shdmem id */
 int
-get_boot_done(void) {
-	return 1;
+_rk_map_shdmem(int shdmem_id, int app_spdid)
+{
+	int my_shdmem_id = -1;
+	extern vaddr_t shdmem_addr;
+
+	printc("RK, mapping shared memory id: %d, from application id: %d\n",
+		shdmem_id, app_spdid);
+	assert(shdmem_id > -1 && app_spdid > -1);
+
+	my_shdmem_id = shmem_map_invoke(shdmem_id);
+	assert(my_shdmem_id > -1);
+	shdmem_addr = shmem_get_vaddr_invoke(my_shdmem_id);
+	assert(shdmem_addr > 0);
+
+	return my_shdmem_id;
 }
+
 
 int
 rk_socket(int domain, int type, int protocol)
@@ -141,61 +156,14 @@ rk_bind(int sockfd, int shdmem_id, socklen_t addrlen)
 }
 
 ssize_t
-rk_recvfrom(int s, int buff_shdmem_id, size_t len, int flags, int from_shdmem_id, int from_addr_len)
+rk_recvfrom(int s, void *buff, size_t len, int flags, struct sockaddr *from, socklen_t *fromlen)
 {
-	static int shdmem_id = -1;
-	static vaddr_t my_addr = 0;
-	vaddr_t my_addr_tmp;
-	void *buff;
-	struct sockaddr *from;
-	socklen_t *from_addr_len_ptr;
-
-	if (shdmem_id == -1 && my_addr == 0) {
-		shdmem_id = shmem_map_invoke(buff_shdmem_id);
-		my_addr = shmem_get_vaddr_invoke(shdmem_id);
-	}
-
-	assert(shdmem_id > -1);
-	assert(my_addr > 0);
-	/* We are using only one page, make sure the id is the same */
-	assert(buff_shdmem_id == from_shdmem_id && buff_shdmem_id == shdmem_id);
-
-	/* TODO, put this in a function */
-	/* In the shared memory page, first comes the message buffer for len amount */
-	my_addr_tmp = my_addr;
-	buff = (void *)my_addr_tmp;
-	my_addr_tmp += len;
-
-	/* Second is from addr length ptr */
-	from_addr_len_ptr  = (void *)my_addr_tmp;
-	*from_addr_len_ptr = from_addr_len;
-	my_addr_tmp += sizeof(socklen_t *);
-
-	/* Last is the from socket address */
-	from = (struct sockaddr *)my_addr_tmp;
-
-	return rump___sysimpl_recvfrom(s, buff, len, flags, from, from_addr_len_ptr);
+	return rump___sysimpl_recvfrom(s, buff, len, flags, from, fromlen);
 }
 
 ssize_t
-rk_sendto(int sockfd, int buff_shdmem_id, size_t len, int flags, int addr_shdmem_id, socklen_t addrlen)
+rk_sendto(int sockfd, void *buff, size_t len, int flags, const struct sockaddr *addr, socklen_t addrlen)
 {
-	static int shdmem_id = -1;
-	static const void *buff = 0;
-	const struct sockaddr *addr;
-
-	if (shdmem_id == -1 && buff == 0) {
-		shdmem_id = shmem_map_invoke(buff_shdmem_id);
-		buff = (const void *)shmem_get_vaddr_invoke(shdmem_id);
-	}
-
-	assert(shdmem_id > -1);
-	assert((int *)buff > (int *)0);
-	assert(buff_shdmem_id == addr_shdmem_id && buff_shdmem_id == shdmem_id);
-
-	addr = (const struct sockaddr *)(buff + len);
-	assert(addr);
-
 	return rump___sysimpl_sendto(sockfd, buff, len, flags, addr, addrlen);
 }
 
@@ -215,7 +183,7 @@ rk_inv_entry(int arg1, int arg2, int arg3, int arg4)
 			break;
 		}
 		case RK_GET_BOOT_DONE: {
-			ret = get_boot_done();
+			assert(0);
 			break;
 		}
 		case RK_SOCKET: {
@@ -227,38 +195,51 @@ rk_inv_entry(int arg1, int arg2, int arg3, int arg4)
 			break;
 		}
 		case RK_RECVFROM: {
-			int s, buff_shdmem_id, flags, from_shdmem_id, from_addr_len;
+			int s, flags;
+			void *buff;
+			struct sockaddr *from;
+			socklen_t *fromlen;
 			size_t len;
+			extern vaddr_t shdmem_addr;
 
-			s = (arg2 >> 16);
-			buff_shdmem_id = (arg2 << 16) >> 16;
-			len = (arg3 >> 16);
-			flags = (arg3 << 16) >> 16;
-			from_shdmem_id = (arg4 >> 16);
-			from_addr_len = (arg4 << 16) >> 16;
+			assert(shdmem_addr > 0);
 
-			ret = (int)rk_recvfrom(s, buff_shdmem_id, len, flags,
-					from_shdmem_id, from_addr_len);
+			s       = arg2;
+			buff    = (void *)shdmem_addr;
+			len     = arg3;
+			flags   = arg4;
+			fromlen = (socklen_t *)(shdmem_addr + 16 + 1); /* 16 is MSG_SZ, see udpserv.c */
+			from    = (struct sockaddr *)(shdmem_addr + 16 + 1 + sizeof(socklen_t));
+
+			ret = (int)rk_recvfrom(s, buff, len, flags, from, fromlen);
 			break;
 		}
 		case RK_SENDTO: {
-			int sockfd, flags, buff_shdmem_id, addr_shdmem_id;
+			int sockfd, flags;
+			void *buff;
 			size_t len;
 			socklen_t addrlen;
 			const struct sockaddr *addr;
+			extern vaddr_t shdmem_addr;
 
-			sockfd            = (arg2 >> 16);
-			buff_shdmem_id    = (arg2 << 16) >> 16;
-			len               = (arg3 >> 16);
-			flags             = (arg3 << 16) >> 16;
-			addr_shdmem_id    = (arg4 >> 16);
-			addrlen           = (arg4 << 16) >> 16;
+			assert(shdmem_addr > 0);
 
-			ret = (int)rk_sendto(sockfd, buff_shdmem_id, len, flags, addr_shdmem_id, addrlen);
+			sockfd  = (arg2 >> 16);
+			buff    = (void *)shdmem_addr;
+			len     = (arg2 << 16) >> 16;
+			flags   = (arg3 << 16);
+			addr    = (struct sockaddr *)(shdmem_addr + 16 + 1 + sizeof(socklen_t) + sizeof(struct sockaddr));
+			addrlen = (arg3 << 16) >> 16;
+
+			ret = (int)rk_sendto(sockfd, buff, len, flags, addr, addrlen);
 			break;
 		}
 		case RK_LOGDATA: {
 			ret = rk_logdata();
+			break;
+		}
+		case RK_MAP_SHDMEM: {
+			ret = _rk_map_shdmem(arg2, arg3);
 			break;
 		}
 		default: assert(0);

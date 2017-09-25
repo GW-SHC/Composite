@@ -4,6 +4,7 @@
 #include "micro_booter.h"
 #include "rk_inv_api.h"
 #include "timer_inv_api.h"
+#include "rumpcalls.h"
 
 #define IN_PORT  9998
 #define OUT_PORT 9999
@@ -16,7 +17,6 @@ extern int vmid;
 
 static unsigned long long __tp_out_prev = 0, __now = 0, __hpet_req_prev = 0;
 static unsigned long __msg_count = 0;
-static char __msg[MSG_SZ + 1] = { '\0' };
 static u32_t __hpets_last_pass = 0;
 
 static volatile u32_t *__hpets_shm_addr = (u32_t *)APP_SUB_SHM_BASE;
@@ -41,14 +41,12 @@ __get_hpet_counter(void)
 static int
 __test_udp_server(void)
 {
-	int fd, fdr;
-	struct sockaddr_in soutput, sinput;
+	int fd, fdr, shdmem_id = -1;
+	extern unsigned long shdmem_addr;
+	struct sockaddr_in sinput;
 	int msg_size=MSG_SZ;
 	int tp_counter = 0;
 
-	soutput.sin_family      = AF_INET;
-	soutput.sin_port        = htons(OUT_PORT);
-	soutput.sin_addr.s_addr = htonl(INADDR_ANY);
 	PRINTC("Sending to port %d\n", OUT_PORT);
 	if ((fd = socket(PF_INET, SOCK_DGRAM, 0)) == -1) {
 		PRINTC("Error Establishing socket\n");
@@ -73,19 +71,52 @@ __test_udp_server(void)
 	rdtscll(__now);
 	__tp_out_prev = __now;
 
-	do {
-		struct sockaddr sa;
-		socklen_t len = sizeof(struct sockaddr);
+	/* Allocate shared memory to use for recvfrom and sendto */
+	assert(shdmem_addr > 0);
+	unsigned long shdmem_max = shdmem_addr + 4096;
 
-		if (recvfrom(fdr, __msg, msg_size, 0, &sa, &len) != msg_size) {
-			PRINTC("read");
+	/* Set up buffer */
+	PRINTC("udpserver, buffer addr: %p\n", (void *)shdmem_addr);
+	char *__msg = (char *)shdmem_addr;
+	*__msg = '\0';
+	shdmem_addr += MSG_SZ + 1;
+	assert(shdmem_addr < shdmem_max);
+
+	/* Set up from addr len */
+	PRINTC("udpserver, len addr: %p\n", (void *)shdmem_addr);
+	socklen_t *len = (socklen_t *)shdmem_addr;
+	*len = sizeof(struct sockaddr);
+	shdmem_addr += sizeof(socklen_t);
+	assert(shdmem_addr < shdmem_max);
+
+	/* Set up from addr struct */
+	PRINTC("udpserver, sa addr: %p\n", (void *)shdmem_addr);
+	struct sockaddr *sa = (struct sockaddr *)shdmem_addr;
+	shdmem_addr += sizeof(struct sockaddr);
+	assert(shdmem_addr < shdmem_max);
+
+	/* Set up output addr struct */
+	PRINTC("udpserver, soutput addr: %p\n", (void *)shdmem_addr);
+	struct sockaddr_in *soutput = (struct sockaddr_in *)shdmem_addr;
+	shdmem_addr += sizeof(struct sockaddr_in);
+	assert(shdmem_addr < shdmem_max);
+
+	soutput->sin_family      = AF_INET;
+	soutput->sin_port        = htons(OUT_PORT);
+	soutput->sin_addr.s_addr = htonl(INADDR_ANY);
+
+	do {
+
+		if (recvfrom(fdr, __msg, msg_size, 0, sa, len) != msg_size) {
+			PRINTC("read ERROR\n");
 			continue;
 		}
 		//PRINTC("Received-msg: seqno:%u time:%llu\n", ((unsigned int *)__msg)[0], ((unsigned long long *)__msg)[1]);
 		/* Reply to the sender */
-		soutput.sin_addr.s_addr = ((struct sockaddr_in*)&sa)->sin_addr.s_addr;
-		if (sendto(fd, __msg, msg_size, 0, (struct sockaddr*)&soutput, sizeof(soutput)) < 0) {
-			PRINTC("sendto");
+		/* TODO soutput needs to be in shared memory */
+		soutput->sin_addr.s_addr = ((struct sockaddr_in*)sa)->sin_addr.s_addr;
+		if (sendto(fd, __msg, msg_size, 0, (struct sockaddr*)soutput, sizeof(struct sockaddr_in)) < 0) {
+			PRINTC("sendto ERROR\n");
 			continue;
 		}
 

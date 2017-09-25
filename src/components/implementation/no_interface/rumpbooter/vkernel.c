@@ -19,6 +19,8 @@ extern void chronos_sched_loop(void);
 extern void  vm_init(void *d);
 extern void *__inv_vkernel_hypercall(int a, int b, int c, int d);
 unsigned int cycs_per_usec;
+int udp_shdmem_id = -1;
+extern int shmem_allocate_invoke(void);
 
 struct vms_info      vmx_info[VM_COUNT];
 struct vkernel_info  vk_info;

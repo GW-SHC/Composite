@@ -9,8 +9,7 @@
 extern int vmid;
 
 int
-rk_inv_op1(void)
-{
+rk_inv_op1(void) {
 	return cos_sinv(APP_CAPTBL_SELF_RK_SINV_BASE, RK_INV_OP1, 0, 0, 0);
 }
 
@@ -39,33 +38,30 @@ rk_inv_bind(int sockfd, int shdmem_id, socklen_t addrlen)
 }
 
 ssize_t
-rk_inv_recvfrom(int s, int buff_shdmem_id, size_t len, int flags, int from_shdmem_id, int fromlenaddr_shdmem_id)
+rk_inv_recvfrom(int s, void *buff, size_t len, int flags, struct sockaddr *from, socklen_t *fromlen)
 {
 	assert(s <= 0xFFFF);
-	assert(buff_shdmem_id <= 0xFFFF);
 	assert(len <= 0xFFFF);
 	assert(flags <= 0xFFFF);
-	assert(from_shdmem_id <= 0xFFFF);
-	assert(fromlenaddr_shdmem_id <= 0xFFFF);
+	/* buff, from and fromlen are stored in page and will be pointed to on RK side */
 
 	return (ssize_t)cos_sinv(APP_CAPTBL_SELF_RK_SINV_BASE, RK_RECVFROM,
-			(s << 16) | buff_shdmem_id, (len << 16) | flags,
-			(from_shdmem_id << 16) | fromlenaddr_shdmem_id);
+			s, len, flags);
 }
 
 ssize_t
-rk_inv_sendto(int sockfd, int buff_shdmem_id, size_t len, int flags, int addr_shdmem_id, socklen_t addrlen)
+rk_inv_sendto(int sockfd, const void *buff, size_t len, int flags, const struct sockaddr *addr, socklen_t addrlen)
 {
 	assert(sockfd <= 0xFFFF);
-	assert(buff_shdmem_id <= 0xFFFF);
 	assert(len <= 0xFFFF);
 	assert(flags <= 0xFFFF);
-	assert(addr_shdmem_id <= (int)0xFFFF);
-	assert(addrlen <= (int)0xFFFF);
+	assert(addrlen <= (socklen_t)0xFFFF);
+	/* buff and addr are stored in page and will be pointed to on RK side */
 
 	return (ssize_t)cos_sinv(APP_CAPTBL_SELF_RK_SINV_BASE, RK_SENDTO,
-			(sockfd << 16) | buff_shdmem_id, (len << 16) | flags,
-			(addr_shdmem_id << 16) | addrlen);
+			((unsigned long)sockfd << (unsigned long)16) | (unsigned long)len,
+			((unsigned long)flags << (unsigned long)16) | (unsigned long)addrlen,
+			0);
 }
 
 /* still using ringbuffer shared data */
@@ -144,28 +140,11 @@ rk_socketcall(int call, unsigned long *args)
 			addr    = (const struct sockaddr *)*(args + 4);
 			addrlen = (socklen_t)*(args + 5);
 
-			/* TODO make this a function */
-			if (shdmem_id < 0 && !shdmem_addr) {
-				shdmem_id = shmem_allocate_invoke();
-				shdmem_addr = shmem_get_vaddr_invoke(shdmem_id);
-			}
-
-			assert(shdmem_id > -1);
-			assert(shdmem_addr > 0);
-
 			assert(canSend == 1);
 			canSend = 0;
 
-			shdmem_addr_tmp = shdmem_addr;
-			shdmem_buff = (void *)shdmem_addr_tmp;
-			memcpy(shdmem_buff, buff, len);
-			shdmem_addr_tmp += len;
-
-			shdmem_sockaddr = (struct sockaddr*)shdmem_addr_tmp;
-			memcpy(shdmem_sockaddr, addr, addrlen);
-
-			ret = (int)rk_inv_sendto(fd, shdmem_id, len, flags,
-				shdmem_id, addrlen);
+			ret = (int)rk_inv_sendto(fd, buff, len, flags,
+				addr, addrlen);
 
 			break;
 		}
@@ -186,33 +165,11 @@ rk_socketcall(int call, unsigned long *args)
                         from_addr         = (struct sockaddr *)*(args + 4);
                         from_addr_len_ptr = (u32_t *)*(args + 5);
 
-			/* TODO make this a function */
-			if (shdmem_id < 0 && !shdmem_addr) {
-				shdmem_id = shmem_allocate_invoke();
-				shdmem_addr = shmem_get_vaddr_invoke(shdmem_id);
-			}
-
-                        assert(shdmem_id > -1);
-                        assert(shdmem_addr > 0);
-
 			assert(canSend == 0);
 			canSend = 1;
 
-                        ret = (int)rk_inv_recvfrom(s, shdmem_id, len, flags,
-                                shdmem_id, *from_addr_len_ptr);
-
-                        /* TODO, put this in a function */
-                        /* Copy buffer back to its original value*/
-			shdmem_addr_tmp = shdmem_addr;
-                        memcpy(buff, (const void * __restrict__)shdmem_addr_tmp, ret);
-                        shdmem_addr_tmp += len; /* Add overall length of buffer */
-
-                        /* Set from_addr_len_ptr pointer to be shared memory at right offset */
-                        *from_addr_len_ptr = *(u32_t *)shdmem_addr_tmp;
-                        shdmem_addr_tmp += sizeof(u32_t *);
-
-                        /* Copy from_addr to be shared memory at right offset */
-                        memcpy(from_addr, (const void * __restrict__)shdmem_addr_tmp, *from_addr_len_ptr);
+                        ret = (int)rk_inv_recvfrom(s, buff, len, flags,
+                                from_addr, from_addr_len_ptr);
 
                         break;
                 }
@@ -231,4 +188,10 @@ rk_socketcall_init(void)
 	posix_syscall_override((cos_syscall_t)rk_socketcall, __NR_socketcall);
 
 	return 0;
+}
+
+int
+rk_map_shdmem(int shdmem_id, int app_spdid)
+{
+	return cos_sinv(APP_CAPTBL_SELF_RK_SINV_BASE, RK_MAP_SHDMEM, shdmem_id, app_spdid, 0);
 }

@@ -89,6 +89,7 @@ enum rk_inv_ops {
 	RK_RECVFROM,
 	RK_SENDTO,
 	RK_LOGDATA,
+	RK_MAP_SHDMEM,
 };
 
 enum timer_inv_ops {

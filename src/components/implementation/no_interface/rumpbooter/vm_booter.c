@@ -20,6 +20,8 @@ struct cringbuf *vmrb = NULL;
 struct cos_defcompinfo *currdci = NULL;
 struct cos_compinfo *currci = NULL;
 
+vaddr_t shdmem_addr = 0;
+
 /*
  * the capability for the thread switched to upon termination.
  * FIXME: not exit thread for now
@@ -79,19 +81,35 @@ vm_init(void *unused)
 	}
 
 	switch(vmid) {
-	case RUMP_SUB:
+	case RUMP_SUB: {
 		init_fn = rump_booter_init;
 		cap_frontier = RK_CAPTBL_FREE;
 		break;
-	case TIMER_SUB:
+	}
+	case TIMER_SUB: {
 		init_fn = timersub_init;
 		cap_frontier = TM_CAPTBL_FREE;
 		break;
-	case DL_APP:
+	}
+	case DL_APP: {
 		init_fn = dlapp_init;
 		break;
-	case UDP_APP:
+	}
+	case UDP_APP: {
+		int shdmem_id = -1, rk_shdmem_id = -1;
+
+		printc("Udp Application, allocating shared memory for RK\n");
+		shdmem_id = shmem_allocate_invoke();
+		assert(shdmem_id > -1);
+		shdmem_addr = shmem_get_vaddr_invoke(shdmem_id);
+		assert(shdmem_addr > 0);
+
+		/* Sinv down to RK to map in shared mem page */
+		rk_shdmem_id = rk_map_shdmem(shdmem_id, vmid);
+		assert(rk_shdmem_id > -1);
+
 		break;
+	}
 	default: assert(0);
 	}
 
