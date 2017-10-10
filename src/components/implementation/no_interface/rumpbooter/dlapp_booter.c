@@ -13,8 +13,10 @@ extern struct cringbuf *vmrb;
 static u32_t dl_made, dl_missed, dl_total;
 static cycles_t next_deadline;
 
-void
-log_info(char *data)
+char *dl_str = NULL;
+
+static void
+log_info(void)
 {
 	int amnt = 0, ret = 0;
 
@@ -23,10 +25,13 @@ log_info(char *data)
 		return;
 	}
 
-	amnt = strlen(data);
-	ret = cringbuf_produce(vmrb, data, amnt);
+	amnt = strlen(dl_str);
+	ret = cringbuf_produce(vmrb, dl_str, amnt);
 	assert(ret == amnt);
 #if defined(APP_COMM_ASYNC)
+#if defined(FAULT_TEST)
+	printc("%s", dl_str);
+#endif
 	cos_asnd(APP_CAPTBL_SELF_IOSND_BASE, 0);
 #elif defined(APP_COMM_SYNC)
 	rk_inv_logdata();
@@ -40,6 +45,7 @@ dlapp_init(void *d)
 {
 	char log[DL_LOG_SIZE] = { '\0' };
 
+	dl_str = log;
 	printc("DL APP STARTED!\n");
 	while (1) {
 		cycles_t now;
@@ -63,9 +69,13 @@ dlapp_init(void *d)
 		if (now > next_deadline) dl_missed ++;
 		else                     dl_made ++;
 
+#if defined(FAULT_TEST)
+		if ((dl_total % 100) == 0) {
+#else
 		if ((dl_total % 1000) == 0) {
-			memset(log, 0, DL_LOG_SIZE);
-			sprintf(log, "Deadlines T:%u, =:%u, x:%u\n", dl_total, dl_made, dl_missed);
+#endif
+			memset(dl_str, 0, DL_LOG_SIZE);
+			sprintf(dl_str, "Deadlines T:%u, =:%u, x:%u\n", dl_total, dl_made, dl_missed);
 #if defined(CHRONOS_ENABLED)
 			/*
 			 * In this case, it's just used for our convenience
@@ -74,7 +84,7 @@ dlapp_init(void *d)
 			 */
 			printc("%s", log);	
 #else
-			log_info(log);
+			log_info();
 #endif
 		}
 

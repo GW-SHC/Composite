@@ -7,10 +7,40 @@
 #include "rumpcalls.h"
 #include <sys/socket.h>
 
+extern char *dl_str;
+
 int rump___sysimpl_socket30(int, int, int);
 int rump___sysimpl_bind(int, const struct sockaddr *, socklen_t);
 ssize_t rump___sysimpl_recvfrom(int, void *, size_t, int, struct sockaddr *, socklen_t *);
 ssize_t rump___sysimpl_sendto(int, const void *, size_t, int, const struct sockaddr *, socklen_t);
+
+static void
+rk_fault_intern(void)
+{
+	static int spatial = 1;
+	static cycles_t prev = 0, now = 0, total = 0;
+	cycles_t thresh = (cycles_t)cycs_per_usec * (cycles_t)3000000;
+
+	rdtscll(now);
+	if (prev == 0) {
+		prev = now;
+	} else {
+		total += (now - prev);
+		prev = now;
+	}
+
+	if (total >= thresh) {
+		if (spatial) {
+			printc("INDUCING SPATIAL FAULT\n");
+			dl_str = NULL;
+			spatial = 0;
+			total = 0;
+		} else {
+			printc("INDUCING TEMPORAL FAULT (spin-forever)\n");
+			while(1) ;
+		}
+	}
+}
 
 int
 rk_inv_op1(void)
@@ -55,7 +85,10 @@ rk_inv_recvfrom(int s, int buff_shdmem_id, size_t len, int flags, int from_shdme
 int
 rk_inv_logdata(void)
 {
-	assert(0);
+	printc("%s", dl_str);
+#if defined(FAULT_TEST)
+	rk_fault_intern();
+#endif
 	return 0;
 }
 

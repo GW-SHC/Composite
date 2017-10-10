@@ -9,22 +9,57 @@
 #include "micro_booter.h"
 #include <sys/socket.h>
 
-int rump___sysimpl_socket30(int, int, int);
-int rump___sysimpl_bind(int, const struct sockaddr *, socklen_t);
-ssize_t rump___sysimpl_recvfrom(int, void *, size_t, int, struct sockaddr *, socklen_t *);
-ssize_t rump___sysimpl_sendto(int, const void *, size_t, int, const struct sockaddr *, socklen_t);
+extern int rump___sysimpl_socket30(int, int, int);
+extern int rump___sysimpl_bind(int, const struct sockaddr *, socklen_t);
+extern ssize_t rump___sysimpl_recvfrom(int, void *, size_t, int, struct sockaddr *, socklen_t *);
+extern ssize_t rump___sysimpl_sendto(int, const void *, size_t, int, const struct sockaddr *, socklen_t);
 
 /* These syncronous invocations involve calls to and from a RumpKernel */
 extern struct cringbuf *vmrb;
+extern char *dl_str;
 
 #define RK_MAX_BUFF_SZ 1024
 static char logdata[RK_MAX_BUFF_SZ] = { '\0' };
+
+static int log_fd = -1;
+
+static void
+rk_fault_intern(void)
+{
+	static int spatial = 1;
+	static cycles_t prev = 0, now = 0, total = 0;
+	cycles_t thresh = ((cycles_t)cycs_per_usec) * (cycles_t)3000000;
+
+	rdtscll(now);
+	if (prev == 0) {
+		prev = now;
+	} else {
+		total += (now - prev);
+		prev = now;
+	}
+
+	if (total >= thresh) {
+		if (spatial) {
+			printc("INDUCING SPATIAL FAULT\n");
+			dl_str = NULL;
+			spatial = 0;
+			total = 0;
+		} else {
+			printc("INDUCING TEMPORAL FAULT (spin-forever)\n");
+			while(1) ;
+		}
+	}
+}
 
 static void
 rk_logdata_intern(void)
 {
 	int amnt = 0, len = 0;
 	int first = 1;
+
+#if defined(FAULT_TEST)
+	rk_fault_intern();
+#endif
 
 	while ((amnt = cringbuf_sz(vmrb))) {
 		if (first) first = 0;
@@ -61,7 +96,6 @@ int
 rk_logdata(void)
 {
 	rk_logdata_intern();
-
 	return 0;
 }
 

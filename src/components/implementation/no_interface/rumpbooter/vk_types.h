@@ -17,6 +17,8 @@
 #define PARENT_PERIOD_US (2*1000)
 #define CHILD_PERIOD_US  (1000)
 
+#undef FAULT_TEST
+
 //#define APP_COMM_SYNC
 #define APP_COMM_ASYNC
 

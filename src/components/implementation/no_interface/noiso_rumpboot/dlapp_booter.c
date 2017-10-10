@@ -7,19 +7,22 @@
 
 #define DL_SPIN_US (500) //0.5ms
 #define DL_LOG_SIZE 128
+char *dl_str = NULL;
 static u32_t dl_made, dl_missed, dl_total;
 static cycles_t next_deadline;
 
-void
-log_info(char *data)
+static void
+log_info(void)
 {
-	printc("%s", data);
+	rk_inv_logdata();
 }
 
 void
 dlapp_init(void *d)
 {
 	char log[DL_LOG_SIZE] = { '\0' };
+
+	dl_str = log;
 
 	printc("DL APP STARTED!\n");
 	while (1) {
@@ -44,10 +47,14 @@ dlapp_init(void *d)
 		if (now > next_deadline) dl_missed ++;
 		else                     dl_made ++;
 
+#if defined(FAULT_TEST)
+		if ((dl_total % 100) == 0) {
+#else
 		if ((dl_total % 1000) == 0) {
-			memset(log, 0, DL_LOG_SIZE);
-			sprintf(log, "Deadlines T:%u, =:%u, x:%u\n", dl_total, dl_made, dl_missed);
-			log_info(log);
+#endif
+			memset(dl_str, 0, DL_LOG_SIZE);
+			sprintf(dl_str, "Deadlines T:%u, =:%u, x:%u\n", dl_total, dl_made, dl_missed);
+			log_info();
 		}
 
 		next_deadline += (cycs_per_usec * HPET_PERIOD_US);

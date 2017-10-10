@@ -15,6 +15,7 @@
 #define HPET_PERIOD_US (10 * 1000)
 
 #define PARENT_PERIOD_US (1000)
+#undef FAULT_TEST
 
 #define VM_FIXED_PERIOD_MS 10
 #define VM_FIXED_BUDGET_MS 3
